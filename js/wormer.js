@@ -22,6 +22,7 @@ var defaults = {
 		mutation: 0.01
 	},
 	render: {
+		enabled: true,
 		width: 400,
 		height: 150,
 		scale: 0.5
@@ -58,7 +59,7 @@ function setupSimulation(options) {
 	for(var i = 0; i < options.simulation.wormsPerGeneration; i++) {
 		engines[i] = setupEngine(createEngine());
 		worms[i] = createWorm(engines[i]);
-		renders[i] = createRender(i, engines[i]);
+		if(options.render.enabled) renders[i] = createRender(i, engines[i]);
 	}
 
 	function createEngine() {
@@ -147,7 +148,7 @@ function setupSimulation(options) {
 
 	function createRender(i, engine) {
 		return Render.create({
-			element: $('<div class="render col-md-4 col-sm-6 col-xs-12" id="render-'+i+'"></div>').appendTo("#renders")[0],
+			element: $('<div class="render col-lg-3 col-md-4 col-sm-6 col-xs-12" id="render-'+i+'"></div>').appendTo("#renders")[0],
 			engine: engine,
 			bounds: {
 				min: { x: 0, y: 0 },
@@ -253,8 +254,10 @@ function setupSimulation(options) {
 			setTimeout(stepWorld, options.simulation.timestep * options.simulation.speedFactor);
 		/* TODO
 		} else if(generation >= options.simulation.end) {
-			for(var i = 0; i < renders.length; i++) {
-				Render.stop(renders[i]);
+			if(options.render.enabled) {
+				for(var i = 0; i < renders.length; i++) {
+					Render.stop(renders[i]);
+				}
 			}
 			alert("Simulation done");
 		*/
@@ -274,9 +277,12 @@ function setupSimulation(options) {
 		elaspedEngineTime = 0;
 		generation = 1;
 
-		for(var i = 0; i < renders.length; i++) {
-			Render.run(renders[i]);
+		if(options.render.enabled) {
+			for(var i = 0; i < renders.length; i++) {
+				Render.run(renders[i]);
+			}
 		}
+
 		setTimeout(stepWorld, 0);
 	}
 
@@ -296,7 +302,7 @@ function setupSimulation(options) {
 		worms.sort(wormFitnessCompare);
 
 		for(var i = 0; i < generationListeners.length; i++) {
-			generationListeners[i](generation, averageFitness, worms[0].fitness);
+			generationListeners[i](generation, worms, averageFitness);
 		}
 
 		var newWorms = [];
@@ -344,9 +350,6 @@ function setupSimulation(options) {
 	};
 }
 
-var average = [];
-var max = [];
-
 $("#start").click(function() {
 	$("#options").slideUp(function() {
 		var options = {
@@ -373,17 +376,79 @@ $("#start").click(function() {
 
 		var simulation = setupSimulation(options);
 		window.simulation = simulation;
+
+		var genLabels = [0];
+		var maxFitness = [0];
+		var avgFitness = [0];
+		var bestGenes = [null];
+		var chart = new Chart($("#historyChart"), {
+			type: 'line',
+			data: {
+				labels: genLabels,
+				datasets: [
+					{
+						type: 'line',
+						label: "Maximum fitness",
+						backgroundColor: "rgba(255, 128, 128, 0.3)",
+						borderColor: "rgba(255, 128, 128, 1)",
+						pointBorderColor: "rgba(255, 128, 128, 1)",
+						tension: 0.2,
+						data: maxFitness
+					},
+					{
+						type: 'line',
+						label: "Average fitness",
+						backgroundColor: "rgba(128, 128, 255, 0.3)",
+						borderColor: "rgba(128, 128, 255, 1)",
+						pointBorderColor: "rgba(128, 128, 255, 1)",
+						tension: 0.2,
+						data: avgFitness
+					}
+				]
+			},
+			options: {
+				//tooltips: {mode:'index'},
+				scales: {
+					xAxes: [{
+						ticks: {
+							autoSkip: true,
+							suggestedMin: 0
+						}
+					}],
+					yAxes: [{
+						ticks: {
+							suggestedMin: 0,
+							//suggestedMax: 100
+						}
+					}]
+				}
+			}
+		});
+		$("#historyChart").click(function(e) {
+			var element = chart.getElementAtEvent(e);
+			if(element && element.length == 1 && element[0]._datasetIndex == 0 /* Maximum fitness */) {
+				console.log(bestGenes[element[0]._index]); // TODO show simulation
+			}
+		});
+
 		$("#gen").text(1);
 		$("#max").text(0);
 		$("#avg").text(0);
-		simulation.onGenerationEnd(function(generation, averageFitness, maxFitness) {
+		simulation.onGenerationEnd(function(generation, sortedWorms, averageFitness) {
 			$("#gen").text(generation + 1);
-			$("#max").text(maxFitness.toFixed(3));
+			$("#max").text(sortedWorms[0].fitness.toFixed(3));
 			$("#avg").text(averageFitness.toFixed(3));
-			average[generation] = averageFitness;
-			max[generation] = maxFitness;
+
+			genLabels[generation] = generation;
+			avgFitness[generation] = averageFitness;
+			maxFitness[generation] = sortedWorms[0].fitness;
+			bestGenes[generation] = sortedWorms[0].gene;
+			chart.update();
 		});
 		$("#simulation").slideDown(function() {
+			window.onbeforeunload = function() {
+				return "Simulation is running. Are you sure to quit?";
+			};
 			simulation.start();
 		});
 	});

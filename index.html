@@ -19,8 +19,10 @@
 
 		<style>
 			.render {
+				padding: 5px;
 				border-radius: 3px;
 				border: 1px solid #CCC;
+				overflow: hidden;
 			}
 		</style>
 	</head>
@@ -74,11 +76,11 @@
 									<div class="panel-body row worm">
 										<div class="form-group col-md-3 col-sm-6 col-xs-12">
 											<label for="width">폭</label>
-											<input type="number" class="form-control" min="0.01" id="width" value="10">
+											<input type="number" class="form-control" min="0.1" step="0.1" id="width" value="10">
 										</div>
 										<div class="form-group col-md-3 col-sm-6 col-xs-12">
 											<label for="length">길이</label>
-											<input type="number" class="form-control" min="0.01" id="length" value="100">
+											<input type="number" class="form-control" min="0.1" step="0.1" id="length" value="100">
 										</div>
 										<div class="form-group col-md-3 col-sm-6 col-xs-12">
 											<label for="foldings">관절 수</label>
@@ -116,8 +118,8 @@
 										<div class="form-group col-md-3 col-sm-6 col-xs-12">
 											<label for="mutation">돌연변이 확률</label>
 											<div class="input-group">
-												<input type="range" class="form-control" min="0" max="1" step="0.05" id="mutation" value="0.05" oninput="mutationOut.value=mutation.value">
-												<output class="input-group-addon" id="mutationOut">0.05</output>
+												<input type="range" class="form-control" min="0" max="1" step="0.01" id="mutation" value="0.01" oninput="mutationOut.value=mutation.value">
+												<output class="input-group-addon" id="mutationOut">0.01</output>
 											</div>
 										</div>
 									</div>
@@ -133,10 +135,35 @@
 
 		<div class="container-fluid" id="simulation" style="display: none">
 			<div class="row">
-				<h1>Generation <span id="gen">1</span></h1>
-				<b>Previous generation</b> <span>Max fitness: <span id="max"></span>, Average: <span id="avg"></span></span><br>
+				<div class="col-xs-12">
+					<div class="panel panel-info">
+						<div class="panel-heading">
+							<h3 class="panel-title">Generation <span id="gen"></span></h3>
+						</div>
+						<div class="panel-body">
+							<b>Previous generation </b> Max fitness: <span id="max"></span>, Average: <span id="avg"></span>
+							<button class="btn btn-link" data-toggle="modal" data-target="#history">History</button>
+							<div id="renders"></div>
+						</div>
+					</div>
+				</div>
 			</div>
-			<div class="row" id="renders">
+		</div>
+
+		<div class="modal fade" id="history" tabindex="-1" role="dialog">
+			<div class="modal-dialog" role="document">
+				<div class="modal-content">
+					<div class="modal-header">
+						<button class="close" data-dismiss="modal">&times;</button>
+						<h4 class="modal-title" id="historyLabel">Worms history</h4>
+					</div>
+					<div class="modal-body">
+						<canvas id="historyChart" width="800" height="600"></canvas>
+					</div>
+					<!--div class="modal-footer">
+						<button class="btn btn-primary" data-dismiss="modal">Close</button>
+					</div-->
+				</div>
 			</div>
 		</div>
 		
@@ -144,6 +171,7 @@
 		<script src="js/matter.min.js"></script>
 		<script src="js/jquery-3.1.1.min.js"></script>
 		<script src="js/bootstrap.min.js"></script>
+		<script src="js/Chart.bundle.min.js"></script>
 		<script src="js/wormer.js"></script>
 	</body>
 </html>

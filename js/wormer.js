@@ -407,7 +407,7 @@ $("#start").click(function() {
 						backgroundColor: "rgba(255, 128, 128, 0.3)",
 						borderColor: "rgba(255, 128, 128, 1)",
 						pointBorderColor: "rgba(255, 128, 128, 1)",
-						tension: 0.2,
+						tension: 0,
 						data: maxFitness
 					},
 					{
@@ -416,7 +416,7 @@ $("#start").click(function() {
 						backgroundColor: "rgba(128, 128, 255, 0.3)",
 						borderColor: "rgba(128, 128, 255, 1)",
 						pointBorderColor: "rgba(128, 128, 255, 1)",
-						tension: 0.2,
+						tension: 0,
 						data: avgFitness
 					}
 				]

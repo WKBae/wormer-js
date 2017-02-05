@@ -151,11 +151,12 @@
 									<div class="page-header">
 										<h3>Simulation status</h3>
 									</div>
-									<form class="form-horizontal">
-										<div class="form-group">
-											
-										</div>
-									</form>
+									<dl class="dl-horizontal">
+										<dt>Overall time spent</dt>
+										<dd id="overall-time"></dd>
+										<dt>Total simulation time</dt>
+										<dd id="simulation-time"></dd>
+									</dl>
 
 									<div class="page-header">
 										<h3>Running simulations</h3>
@@ -171,20 +172,12 @@
 											<div class="page-header">
 												<h3>Previous generation</h3>
 											</div>
-											<form class="form-horizontal">
-												<div class="form-group">
-													<label for="max-fitness" class="col-sm-2 control-label">Maximum fitness</label>
-													<div class="col-sm-10">
-														<output class="form-control" id="max-fitness" readonly></output>
-													</div>
-												</div>
-												<div class="form-group">
-													<label for="avg-fitness" class="col-sm-2 control-label">Average fitness</label>
-													<div class="col-sm-10">
-														<output class="form-control" id="avg-fitness" readonly></output>
-													</div>
-												</div>
-											</form>
+											<dl class="dl-horizontal">
+												<dt>Maximum fitness</dt>
+												<dd id="max-fitness"></dd>
+												<dt>Average fitness</dt>
+												<dd id="avg-fitness"></dd>
+											</dl>
 										</div>
 									</div>
 								</div>

@@ -23,9 +23,12 @@ var defaults = {
 	},
 	render: {
 		enabled: true,
-		width: 400,
+		width: 1000,
 		height: 150,
-		scale: 0.5
+		scale: 0.5,
+		createRenderWrapper: function(i) {
+			return $('<div class="render col-lg-6 col-xs-12" id="render-'+i+'"></div>').appendTo("#renders")[0];
+		}
 	}
 };
 
@@ -51,6 +54,8 @@ function setupSimulation(options) {
 	var elaspedEngineTime;
 
 	var generation;
+
+	var stepTimeout = 0, doPause = false;
 
 	var generationListeners = [];
 
@@ -148,7 +153,7 @@ function setupSimulation(options) {
 
 	function createRender(i, engine) {
 		return Render.create({
-			element: $('<div class="render col-lg-3 col-md-4 col-sm-6 col-xs-12" id="render-'+i+'"></div>').appendTo("#renders")[0],
+			element: options.render.createRenderWrapper(i),
 			engine: engine,
 			bounds: {
 				min: { x: 0, y: 0 },
@@ -431,13 +436,13 @@ $("#start").click(function() {
 			}
 		});
 
-		$("#gen").text(1);
-		$("#max").text(0);
-		$("#avg").text(0);
+		$("#generation").text(1);
+		$("#max-fitness").text(0);
+		$("#avg-fitness").text(0);
 		simulation.onGenerationEnd(function(generation, sortedWorms, averageFitness) {
-			$("#gen").text(generation + 1);
-			$("#max").text(sortedWorms[0].fitness.toFixed(3));
-			$("#avg").text(averageFitness.toFixed(3));
+			$("#generation").text(generation + 1);
+			$("#max-fitness").text(sortedWorms[0].fitness.toFixed(3));
+			$("#avg-fitness").text(averageFitness.toFixed(3));
 
 			genLabels[generation] = generation;
 			avgFitness[generation] = averageFitness;

@@ -256,7 +256,7 @@ function setupSimulation(options) {
 
 		elaspedEngineTime += options.simulation.timestep;
 		if(elaspedEngineTime < options.simulation.until) {
-			setTimeout(stepWorld, options.simulation.timestep * options.simulation.speedFactor);
+			stepTimeout = setTimeout(stepWorld, options.simulation.timestep * options.simulation.speedFactor);
 		/* TODO
 		} else if(generation >= options.simulation.end) {
 			if(options.render.enabled) {
@@ -272,7 +272,7 @@ function setupSimulation(options) {
 			phase = 0;
 			elaspedEngineTime = 0;
 			generation++;
-			setTimeout(stepWorld, options.simulation.timestep * options.simulation.speedFactor);
+			stepTimeout = setTimeout(stepWorld, options.simulation.timestep * options.simulation.speedFactor);
 		}
 	}
 	
@@ -288,7 +288,15 @@ function setupSimulation(options) {
 			}
 		}
 
-		setTimeout(stepWorld, 0);
+		stepTimeout = setTimeout(stepWorld, 0);
+	}
+
+	function pause() {
+		clearTimeout(stepTimeout);
+		stepTimeout = 0;
+	}
+	function resume() {
+		stepTimeout = setTimeout(stepWorld, 0);
 	}
 
 	function proceedGeneration() {
@@ -348,6 +356,8 @@ function setupSimulation(options) {
 
 	return {
 		start: start,
+		pause: pause,
+		resume: resume,
 		onGenerationEnd: addOnGenerationEndListener,
 		getWorms: function() {
 			return worms;

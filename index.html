@@ -17,12 +17,20 @@
 			<script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
 		<![endif]-->
 
+		<link rel="stylesheet" href="css/dygraph.min.css">
+
 		<style>
 			.render {
 				padding: 5px;
 				border-radius: 3px;
 				border: 1px solid #CCC;
 				overflow: hidden;
+			}
+			.dygraph-legend {
+				background: rgba(240, 240, 240, 0.5);
+				padding: 5px;
+				width: auto;
+				border-radius: 3px;
 			}
 		</style>
 	</head>
@@ -124,7 +132,9 @@
 										</div>
 									</div>
 								</div>
-
+								<div class="form-group">
+									<input type="checkbox" id="doRender" checked><label for="doRender"> 화면 그리기</label>
+								</div>
 								<input type="submit" class="btn btn-primary" id="start" value="시작"> <input type="reset" value="초기화" class="btn btn-default">
 							</form>
 						</div>
@@ -166,7 +176,8 @@
 								<div class="tab-pane" id="tab-history">
 									<div class="row">
 										<div class="col-sm-6 col-xs-12">
-											<canvas id="historyChart" width="800" height="600"></canvas>
+											<div id="historyChart" style="width:100%"></div>
+											<button class="btn btn-link" id="export-graph">Export CSV...</button>
 										</div>
 										<div class="col-sm-6 col-xs-12">
 											<div class="page-header">
@@ -188,10 +199,10 @@
 			</div>
 		</div>
 
-		<script src="js/matter.min.js"></script>
 		<script src="js/jquery-3.1.1.min.js"></script>
+		<script src="js/matter.min.js"></script>
 		<script src="js/bootstrap.min.js"></script>
-		<script src="js/Chart.bundle.min.js"></script>
+		<script src="js/dygraph.min.js"></script>
 		<script src="js/wormer.js"></script>
 	</body>
 </html>

@@ -21,7 +21,7 @@ var defaults = {
 		period: 5, // timesteps of world passed between each phase
 		mutation: 0.01
 	},
-	render: {
+	render: { // TODO move render out, independent of simulation
 		enabled: true,
 		width: 1000,
 		height: 150,
@@ -258,6 +258,7 @@ function setupSimulation(options) {
 	}
 
 	function stepWorld() {
+		Events.trigger(simulation, 'beforeTick');
 		for(var i = 0; i < options.simulation.wormsPerGeneration; i++) {
 			applyMovement(worms[i].constraints, worms[i].gene, phase);
 			Engine.update(engines[i], options.simulation.timestep);
@@ -395,107 +396,185 @@ function setupSimulation(options) {
 	return simulation;
 }
 
-$("#start").click(function() {
-	$("#options").slideUp(function() {
-		var options = {
-			simulation: {
-				wormsPerGeneration: parseInt($("#worms-per-gen").val(), 10),
-				preservedWorms: parseInt($("#preserved-worms").val(), 10),
-				speedFactor: parseFloat($("#speed").val()),
-				until: parseInt($("#until").val(), 10),
-				end: parseInt($("#end").val(), 10)
-			},
-			worm: {
-				width: parseInt($("#width").val(), 10),
-				length: parseInt($("#length").val(), 10),
-				foldings: parseInt($("#foldings").val(), 10),
-				stiffness: parseFloat($("#stiffness").val()),
-				friction: parseFloat($("#friction").val())
-			},
-			gene: {
-				phases: parseInt($("#phases").val(), 10),
-				period: parseInt($("#period").val(), 10), // timesteps of world passed between each phase
-				mutation: parseFloat($("#mutation").val())
+$(function() {
+	var graphData = [[0, [0, 0], [0, 0], [0, 0]]];
+	var graph;
+	var bestGenes = [null];
+	function findBestGene(idx) {
+		while(idx > 0 && !bestGenes[idx]) idx--;
+		if(idx > 0) {
+			return bestGenes[idx];
+		} else {
+			return null;
+		}
+	}
+	function geneEquals(gene1, gene2) {
+		if(gene1 === gene2) return true;
+		if(gene1 == null || gene2 == null) return false;
+		
+		for(var i = 0; i < gene1.length; i++) {
+			for(var j = 0; j < gene1[i].length; j++) {
+				if(gene1[i][j] != gene2[i][j]) return false;
 			}
-		};
+		}
+		return true;
+	}
 
-		var simulation = setupSimulation(options);
-		window.simulation = simulation;
-
-		var genLabels = [0];
-		var maxFitness = [0];
-		var avgFitness = [0];
-		var bestGenes = [null];
-		var chart = new Chart($("#historyChart"), {
-			type: 'line',
-			data: {
-				labels: genLabels,
-				datasets: [
-					{
-						type: 'line',
-						label: "Maximum fitness",
-						backgroundColor: "rgba(255, 128, 128, 0.3)",
-						borderColor: "rgba(255, 128, 128, 1)",
-						pointBorderColor: "rgba(255, 128, 128, 1)",
-						tension: 0,
-						data: maxFitness
-					},
-					{
-						type: 'line',
-						label: "Average fitness",
-						backgroundColor: "rgba(128, 128, 255, 0.3)",
-						borderColor: "rgba(128, 128, 255, 1)",
-						pointBorderColor: "rgba(128, 128, 255, 1)",
-						tension: 0,
-						data: avgFitness
-					}
-				]
-			},
-			options: {
-				//tooltips: {mode:'index'},
-				scales: {
-					xAxes: [{
-						ticks: {
-							autoSkip: true,
-							suggestedMin: 0
-						}
-					}],
-					yAxes: [{
-						ticks: {
-							suggestedMin: 0,
-							//suggestedMax: 100
-						}
-					}]
+	$("#start").click(function() {
+		$("#options").slideUp(function() {
+			var options = {
+				simulation: {
+					wormsPerGeneration: parseInt($("#worms-per-gen").val(), 10),
+					preservedWorms: parseInt($("#preserved-worms").val(), 10),
+					speedFactor: parseFloat($("#speed").val()),
+					until: parseInt($("#until").val(), 10),
+					end: parseInt($("#end").val(), 10)
+				},
+				worm: {
+					width: parseInt($("#width").val(), 10),
+					length: parseInt($("#length").val(), 10),
+					foldings: parseInt($("#foldings").val(), 10),
+					stiffness: parseFloat($("#stiffness").val()),
+					friction: parseFloat($("#friction").val())
+				},
+				gene: {
+					phases: parseInt($("#phases").val(), 10),
+					period: parseInt($("#period").val(), 10), // timesteps of world passed between each phase
+					mutation: parseFloat($("#mutation").val())
+				},
+				render: {
+					enabled: $("#doRender")[0].checked
 				}
-			}
-		});
-		$("#historyChart").click(function(e) {
-			var element = chart.getElementAtEvent(e);
-			if(element && element.length == 1 && element[0]._datasetIndex == 0 /* Maximum fitness */) {
-				console.log(bestGenes[element[0]._index]); // TODO show simulation
-			}
-		});
-
-		$("#generation").text(1);
-		$("#max-fitness").text(0);
-		$("#avg-fitness").text(0);
-		simulation.onGenerationEnd(function(generation, sortedWorms, averageFitness) {
-			$("#generation").text(generation + 1);
-			$("#max-fitness").text(sortedWorms[0].fitness.toFixed(3));
-			$("#avg-fitness").text(averageFitness.toFixed(3));
-
-			genLabels[generation] = generation;
-			avgFitness[generation] = averageFitness;
-			maxFitness[generation] = sortedWorms[0].fitness;
-			bestGenes[generation] = sortedWorms[0].gene;
-			chart.update();
-		});
-		$("#simulation").slideDown(function() {
-			window.onbeforeunload = function() {
-				return "Simulation is running. Are you sure to quit?";
 			};
-			simulation.start();
+
+			var simulation = setupSimulation(options);
+			window.simulation = simulation;
+
+			/*var genLabels = [0];
+			var maxFitness = [0];
+			var avgFitness = [0];*/
+
+			/*var chart = new Chart($("#historyChart"), {
+				type: 'line',
+				data: {
+					labels: genLabels,
+					datasets: [
+						{
+							type: 'line',
+							label: "Maximum fitness",
+							backgroundColor: "rgba(255, 128, 128, 0.3)",
+							borderColor: "rgba(255, 128, 128, 1)",
+							pointBorderColor: "rgba(255, 128, 128, 1)",
+							tension: 0,
+							data: maxFitness
+						},
+						{
+							type: 'line',
+							label: "Average fitness",
+							backgroundColor: "rgba(128, 128, 255, 0.3)",
+							borderColor: "rgba(128, 128, 255, 1)",
+							pointBorderColor: "rgba(128, 128, 255, 1)",
+							tension: 0,
+							data: avgFitness
+						}
+					]
+				},
+				options: {
+					//tooltips: {mode:'index'},
+					scales: {
+						xAxes: [{
+							ticks: {
+								autoSkip: true,
+								suggestedMin: 0
+							}
+						}],
+						yAxes: [{
+							ticks: {
+								suggestedMin: 0,
+								//suggestedMax: 100
+							}
+						}]
+					}
+				}
+			});
+			$("#historyChart").click(function(e) {
+				var element = chart.getElementAtEvent(e);
+				if(element && element.length == 1 && element[0]._datasetIndex == 0 /* Maximum fitness *) {
+					console.log(bestGenes[element[0]._index]); // TODO show simulation
+				}
+			});*/
+			var graphElem = document.getElementById("historyChart");
+			graph = new Dygraph(graphElem, graphData, {
+				xlabel: "Generations",
+				ylabel: "Fitness",
+				labels: ["x", "Max", "Avg", "Mid"],
+				valueRange: [0, null],
+				errorBars: true,
+				legend: 'follow',
+				labelsSeparateLines: true,
+				//errorBars: true,
+				showRangeSelector: true,
+				pointClickCallback: function(e, point) {
+					if(point.name == "Max") {
+						findBestGene(point.idx) // simulate if not null
+					}
+				}
+			});
+			//graph.resize();
+
+			$("#generation").text(1);
+			$("#max-fitness").text(0);
+			$("#avg-fitness").text(0);
+			simulation.on('generationEnd', function(e) {
+				var gen = e.generation;
+				$("#generation").text(gen + 1);
+				$("#max-fitness").text(e.worms[0].fitness.toFixed(3));
+				$("#avg-fitness").text(e.averageFitness.toFixed(3));
+
+				/*genLabels[gen] = e.generation;
+				avgFitness[gen] = e.averageFitness;
+				maxFitness[gen] = e.worms[0].fitness;
+				bestGenes[gen] = e.worms[0].gene;*/
+
+				var variance = 0;
+				for(var i = 0; i < e.worms.length; i++) {
+					variance += (e.averageFitness - e.worms[i].fitness) * (e.averageFitness - e.worms[i].fitness);
+				}
+				variance /= e.worms.length;
+
+				graphData.push([e.generation, [e.worms[0].fitness, 0], [e.averageFitness, Math.sqrt(variance)], [e.worms[(e.worms.length / 2)|0].fitness, 0]]);
+				graph.updateOptions({'file': graphData});
+				//chart.update();
+
+				if(!geneEquals(e.worms[0].gene, findBestGene(gen-1))) {
+					bestGenes[gen] = e.worms[0].gene;
+				}
+			});
+			$("#simulation").slideDown(function() {
+				window.onbeforeunload = function() {
+					return "Simulation is running. Are you sure to quit?";
+				};
+				simulation.start();
+			});
 		});
+		return false;
 	});
-	return false;
+
+	$("#export-graph").click(function() {
+		var elem = document.createElement('a');
+		var csv = "\ufeffGeneration,Maximum,Average,Median\n"; // utf-8 BOM
+		for(var i = 0; i < graphData.length; i++) {
+			csv += graphData[i][0] + "," + graphData[i][1] + "," + graphData[i][2] + "," + graphData[i][3] + "\n";
+		}
+		elem.setAttribute('href', "data:text/csv;charset=utf8," + encodeURIComponent(csv));
+		elem.setAttribute('download', "graph.csv");
+		elem.style.display = "none";
+		document.body.appendChild(elem);
+		elem.click();
+		document.body.removeChild(elem);
+	});
+
+	$("a[data-toggle=tab][href='#tab-history']").on('shown.bs.tab', function(e) {
+		graph.resize();
+	});
 });

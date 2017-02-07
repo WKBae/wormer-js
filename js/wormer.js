@@ -35,6 +35,7 @@ var defaults = {
 function setupSimulation(options) {
 	// @const
 	var Common = Matter.Common,
+		Events = Matter.Events,
 		Engine = Matter.Engine,
 		Render = Matter.Render,
 		World = Matter.World,
@@ -51,15 +52,30 @@ function setupSimulation(options) {
 	var renders = [];
 
 	var phase, period;
-	var elaspedEngineTime;
+	var elaspedEngineTime, elaspedTotal;
 
 	var generation;
 
 	var stepTimeout = 0, doPause = false;
 
-	var generationListeners = [];
+	var simulation;
 
 	options = Common.extend(defaults, options);
+
+	simulation = {
+		start: start,
+		pause: pause,
+		resume: resume,
+		on: function(eventNames, callback) {
+			return Events.on(simulation, eventNames, callback);
+		},
+		off: function(eventNames, callback) {
+			Events.off(simulation, eventNames, callback);
+		},
+		getWorms: function() {
+			return worms;
+		}
+	};
 
 	for(var i = 0; i < options.simulation.wormsPerGeneration; i++) {
 		engines[i] = setupEngine(createEngine());
@@ -94,6 +110,8 @@ function setupSimulation(options) {
 		});
 
 		World.add(engine.world, ground);
+
+		Events.trigger(simulation, 'setupEngine', {engine: engine});
 
 		return engine;
 	}
@@ -255,6 +273,13 @@ function setupSimulation(options) {
 		}
 
 		elaspedEngineTime += options.simulation.timestep;
+		elaspedTotal += options.simulation.timestep;
+
+		Events.trigger(simulation, 'afterTick tick', {
+			engineTime: elaspedEngineTime,
+			totalEngineTime: elaspedTotal
+		});
+
 		if(elaspedEngineTime < options.simulation.until) {
 			stepTimeout = setTimeout(stepWorld, options.simulation.timestep * options.simulation.speedFactor);
 		/* TODO
@@ -280,6 +305,7 @@ function setupSimulation(options) {
 		period = 0;
 		phase = 0;
 		elaspedEngineTime = 0;
+		elaspedTotal = 0;
 		generation = 1;
 
 		if(options.render.enabled) {
@@ -288,15 +314,25 @@ function setupSimulation(options) {
 			}
 		}
 
+		Events.trigger(simulation, 'start');
 		stepTimeout = setTimeout(stepWorld, 0);
 	}
 
 	function pause() {
 		clearTimeout(stepTimeout);
 		stepTimeout = 0;
+		Events.trigger(simulation, 'pause');
 	}
 	function resume() {
+		Events.trigger(simulation, 'resume');
 		stepTimeout = setTimeout(stepWorld, 0);
+	}
+
+	function end() {
+		clearTimeout(stepTimeout);
+		stepTimeout = 0;
+		/* TODO */
+		Events.trigger(simulation, 'end');
 	}
 
 	function proceedGeneration() {
@@ -314,9 +350,11 @@ function setupSimulation(options) {
 
 		worms.sort(wormFitnessCompare);
 
-		for(var i = 0; i < generationListeners.length; i++) {
-			generationListeners[i](generation, worms, averageFitness);
-		}
+		Events.trigger(simulation, 'generationEnd', {
+			generation: generation,
+			worms: worms,
+			averageFitness: averageFitness
+		});
 
 		var newWorms = [];
 
@@ -354,15 +392,7 @@ function setupSimulation(options) {
 		generationListeners.push(listener); // TODO rename to generation end listener
 	}
 
-	return {
-		start: start,
-		pause: pause,
-		resume: resume,
-		onGenerationEnd: addOnGenerationEndListener,
-		getWorms: function() {
-			return worms;
-		}
-	};
+	return simulation;
 }
 
 $("#start").click(function() {

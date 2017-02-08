@@ -2,8 +2,8 @@
 
 var defaults = {
 	simulation: {
-		wormsPerGeneration: 20,
-		preservedWorms: 3,
+		wormsPerGeneration: 30,
+		preservedWorms: 4,
 		timestep: 1000 / 60,
 		speedFactor: 0,
 		duration: 15000
@@ -11,9 +11,9 @@ var defaults = {
 	worm: {
 		width: 10,
 		length: 100,
-		joints: 8,
+		joints: 4,
 		stiffness: 0.4,
-		friction: 0.1
+		friction: 0.5
 	},
 	gene: {
 		phases: 128,

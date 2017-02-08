@@ -42,6 +42,11 @@
 				margin-top: 0;
 			}
 		</style>
+		<script>
+			function sliderOut(self, target, digits) {
+				target.value = parseFloat(self.value).toFixed(digits);
+			}
+		</script>
 	</head>
 	<body>
 		<div class="container-fluid" id="options">
@@ -49,98 +54,107 @@
 				<div class="col-xs-12">
 					<div class="panel panel-primary">
 						<div class="panel-heading">
-							<h3 class="panel-title">설정</h3>
+							<h3 class="panel-title">Settings</h3>
 						</div>
 						<div class="panel-body">
 							<form>
 								<div class="panel panel-default">
 									<div class="panel-heading">
-										<h3 class="panel-title">시뮬레이션 설정</h3>
+										<h3 class="panel-title">Simulation options</h3>
 									</div>
 									<div class="panel-body row simulation">
 										<div class="form-group col-md-3 col-sm-6 col-xs-12">
-											<label for="worms-per-gen">세대당 개체 수</label>
-											<input type="number" class="form-control" min="1" id="worms-per-gen" value="20">
+											<label for="worms-per-gen">Population per generation</label>
+											<input type="number" class="form-control" min="1" id="worms-per-gen" value="30">
 										</div>
 										<div class="form-group col-md-3 col-sm-6 col-xs-12">
-											<label for="preserved-worms">유지되는 상위 개체 수</label>
-											<input type="number" class="form-control" min="0" id="preserved-worms" value="3">
+											<label for="preserved-worms">Preserved top worms</label>
+											<input type="number" class="form-control" min="0" id="preserved-worms" value="4">
 										</div>
 										<!--div class="form-group col-md-3 col-sm-6 col-xs-12"-->
 											<input type="hidden" id="timestep" value="60">
 										<!--/div-->
 										<div class="form-group col-md-3 col-sm-6 col-xs-12">
-											<label for="speed">시뮬레이션 속도</label>
+											<label for="speed">Simulation speed factor</label>
 											<div class="input-group">
-												<input type="range" class="form-control" min="0" max="1" step="0.1" id="speed" value="0" size="10" oninput="speedOut.value=speed.value">
-												<output class="input-group-addon" id="speedOut">0</output>
+												<input type="range" class="form-control" min="0" max="1" step="0.05" id="speed" value="0" size="10" oninput="sliderOut(this,speedOut,2)">
+												<output class="input-group-addon" id="speedOut">0.00</output>
 											</div>
 										</div>
 										<div class="form-group col-md-3 col-sm-6 col-xs-12">
-											<label for="duration">한 세대가 끝날 때까지의 시간</label>
-											<input type="number" class="form-control" min="0" id="duration" value="15000">
+											<label for="duration">Time limit of a generation</label>
+											<div class="input-group">
+												<input type="number" class="form-control" min="0" id="duration" value="15000">
+												<div class="input-group-addon">ms</div>
+											</div>
 										</div>
 									</div>
 								</div>
 								<div class="panel panel-default">
 									<div class="panel-heading">
-										<h3 class="panel-title">개체 설정</h3>
+										<h3 class="panel-title">Worm options</h3>
 									</div>
 									<div class="panel-body row worm">
 										<div class="form-group col-md-3 col-sm-6 col-xs-12">
-											<label for="width">폭</label>
+											<label for="width">Width</label>
 											<input type="number" class="form-control" min="0.1" step="0.1" id="width" value="10">
 										</div>
 										<div class="form-group col-md-3 col-sm-6 col-xs-12">
-											<label for="length">길이</label>
+											<label for="length">Length</label>
 											<input type="number" class="form-control" min="0.1" step="0.1" id="length" value="100">
 										</div>
 										<div class="form-group col-md-3 col-sm-6 col-xs-12">
-											<label for="joints">관절 수</label>
-											<input type="number" class="form-control" min="1" id="joints" value="8">
+											<label for="joints">Number of joints</label>
+											<input type="number" class="form-control" min="1" id="joints" value="4">
 										</div>
 										<div class="form-group col-md-3 col-sm-6 col-xs-12">
-											<label for="stiffness">유연성</label>
+											<label for="stiffness">Stiffness</label>
 											<div class="input-group">
-												<input type="range" class="form-control" min="0" max="1" step="0.05" id="stiffness" value="0.4" oninput="stiffnessOut.value=stiffness.value">
-												<output class="input-group-addon" id="stiffnessOut">0.4</output>
+												<input type="range" class="form-control" min="0" max="1" step="0.05" id="stiffness" value="0.4" oninput="sliderOut(this,stiffnessOut,2)">
+												<output class="input-group-addon" id="stiffnessOut">0.40</output>
 											</div>
 										</div>
 										<div class="form-group col-md-3 col-sm-6 col-xs-12">
-											<label for="friction">마찰력</label>
+											<label for="friction">Friction</label>
 											<div class="input-group">
-												<input type="range" class="form-control" min="0" max="1" step="0.05" id="friction" value="0.1" oninput="frictionOut.value=friction.value">
-												<output class="input-group-addon" id="frictionOut">0.1</output>
+												<input type="range" class="form-control" min="0" max="1" step="0.05" id="friction" value="0.5" oninput="sliderOut(this,frictionOut,2)">
+												<output class="input-group-addon" id="frictionOut">0.50</output>
 											</div>
 										</div>
 									</div>
 								</div>
 								<div class="panel panel-default">
 									<div class="panel-heading">
-										<div class="panel-title">유전자 설정</div>
+										<div class="panel-title">Gene options</div>
 									</div>
 									<div class="panel-body row gene">
 										<div class="form-group col-md-3 col-sm-6 col-xs-12">
-											<label for="phases">유전자의 갯수</label>
+											<label for="phases">Number of phases</label>
 											<input type="number" class="form-control" min="1" id="phases" value="128">
 										</div>
 										<div class="form-group col-md-3 col-sm-6 col-xs-12">
-											<label for="period">한 유전자가 유지되는 시간</label>
+											<label for="period">Timesteps per phase</label>
 											<input type="number" class="form-control" min="1" id="period" value="5">
 										</div>
 										<div class="form-group col-md-3 col-sm-6 col-xs-12">
-											<label for="mutation">돌연변이 확률</label>
+											<label for="mutation">Mutation probability</label>
 											<div class="input-group">
-												<input type="range" class="form-control" min="0" max="1" step="0.01" id="mutation" value="0.01" oninput="mutationOut.value=mutation.value">
-												<output class="input-group-addon" id="mutationOut">0.01</output>
+												<input type="range" class="form-control" min="0" max="0.5" step="0.005" id="mutation" value="0.01" oninput="sliderOut(this,mutationOut,3)">
+												<output class="input-group-addon" id="mutationOut">0.010</output>
 											</div>
 										</div>
 									</div>
 								</div>
-								<div class="form-group">
-									<input type="checkbox" id="doRender" checked><label for="doRender"> 화면 그리기</label>
+								<div class="checkbox">
+									<label><input type="checkbox" id="doRender" checked> Render simulation</label>
 								</div>
-								<input type="submit" class="btn btn-primary" id="start" value="시작"> <input type="reset" value="초기화" class="btn btn-default">
+
+								<button type="submit" class="btn btn-primary" id="start">
+									<span class="glyphicon glyphicon-play" aria-hidden="true"></span> Start
+								</button>
+								<button type="reset" class="btn btn-default">
+									<span class="glyphicon glyphicon-repeat" aria-hidden="true"></span> Reset
+								</button>
 							</form>
 						</div>
 					</div>
@@ -208,7 +222,7 @@
 													<dd class="info-option-simulation-preservedWorms"></dd>
 													<dt>Simulation speed</dt>
 													<dd class="info-option-simulation-speedFactor"></dd>
-													<dt>Generation duration</dt>
+													<dt>Time limit per gen</dt>
 													<dd class="info-option-simulation-duration"></dd>
 												</dl>
 											</div>

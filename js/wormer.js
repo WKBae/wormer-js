@@ -6,8 +6,7 @@ var defaults = {
 		preservedWorms: 3,
 		timestep: 1000 / 60,
 		speedFactor: 0,
-		duration: 15000,
-		end: 50
+		duration: 15000
 	},
 	worm: {
 		width: 10,
@@ -282,15 +281,6 @@ function setupSimulation(options) {
 
 		if(sim._engineTime < sim._options.simulation.duration) {
 			sim._stepTimeout = setTimeout(stepWorld, sim._options.simulation.timestep * sim._options.simulation.speedFactor);
-		/* TODO
-		} else if(sim._generation >= sim._options.simulation.end) {
-			if(sim._options.render.enabled) {
-				for(var i = 0; i < renders.length; i++) {
-					Render.stop(renders[i]);
-				}
-			}
-			alert("Simulation done");
-		*/
 		} else {
 			proceedGeneration();
 			sim._period = 0;
@@ -455,8 +445,7 @@ $(function() {
 					wormsPerGeneration: parseInt($("#worms-per-gen").val(), 10),
 					preservedWorms: parseInt($("#preserved-worms").val(), 10),
 					speedFactor: parseFloat($("#speed").val()),
-					duration: parseInt($("#duration").val(), 10),
-					end: parseInt($("#end").val(), 10)
+					duration: parseInt($("#duration").val(), 10)
 				},
 				worm: {
 					width: parseInt($("#width").val(), 10),

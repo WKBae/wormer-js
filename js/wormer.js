@@ -51,6 +51,8 @@ function setupSimulation(options) {
 		start: start,
 		pause: pause,
 		resume: resume,
+		terminate: terminate,
+
 		on: function(eventNames, callback) {
 			return Events.on(sim, eventNames, callback);
 		},
@@ -70,8 +72,9 @@ function setupSimulation(options) {
 		_engineTime: 0,
 		_totalEngineTime: 0,
 
+		_isStarted: false,
 		_stepTimeout: 0,
-		_doPause: false
+		_isPaused: false
 	};
 
 	for(var i = 0; i < sim._options.simulation.wormsPerGeneration; i++) {
@@ -299,11 +302,20 @@ function setupSimulation(options) {
 	}
 	
 	function start() {
+		if(sim._isStarted) {
+			if(sim._isPaused) {
+				resume();
+			}
+			return;
+		}
+
 		sim._period = 0;
 		sim._phase = 0;
 		sim._engineTime = 0;
 		sim._totalEngineTime = 0;
 		sim._generation = 1;
+		sim._isStarted = true;
+		sim._isPaused = false;
 
 		if(sim._options.render.enabled) {
 			for(var i = 0; i < renders.length; i++) {
@@ -311,25 +323,45 @@ function setupSimulation(options) {
 			}
 		}
 
-		Events.trigger(sim, 'start');
+		Events.trigger(sim, 'start', {
+			options: sim._options
+		});
 		sim._stepTimeout = setTimeout(stepWorld, 0);
 	}
 
 	function pause() {
+		if(!sim._isStarted || sim._isPaused) return false;
+
 		clearTimeout(sim._stepTimeout);
 		sim._stepTimeout = 0;
+		sim._isPaused = true;
+
 		Events.trigger(sim, 'pause');
+
+		return sim._isStarted && sim._isPaused; // state can be changed in event handlers
 	}
 	function resume() {
-		Events.trigger(sim, 'resume');
+		if(!sim._isStarted || !sim._isPaused) return false;
+
+		sim._isPaused = false;
 		sim._stepTimeout = setTimeout(stepWorld, 0);
+
+		Events.trigger(sim, 'resume');
+
+		return sim._isStarted && !sim._isPaused;
 	}
 
-	function end() {
+	function terminate() {
+		if(!sim._isStarted) return false;
+
 		clearTimeout(sim._stepTimeout);
 		sim._stepTimeout = 0;
-		/* TODO */
-		Events.trigger(sim, 'end');
+		sim._isStarted = false;
+		sim._isPaused = false;
+		
+		Events.trigger(sim, 'terminate');
+
+		return !sim._isStarted;
 	}
 
 	function proceedGeneration() {
@@ -446,71 +478,175 @@ $(function() {
 			var simulation = setupSimulation(options);
 			window.simulation = simulation;
 
-			var showDeviation = false;
-			if(showDeviation) {
-				graphData = [[0, [0, 0], [0, 0], [0, 0]]];
-			} else {
-				graphData = [[0, 0, 0, 0]];
-			}
-			graph = new Dygraph("historyChart", graphData, {
-				xlabel: "Generations",
-				ylabel: "Fitness",
-				labels: ["x", "Max", "Avg", "Mid"],
-				valueRange: [0, null],
-				errorBars: showDeviation,
-				legend: 'follow',
-				labelsSeparateLines: true,
-				//errorBars: true,
-				showRangeSelector: true,
-				pointClickCallback: function(e, point) {
-					if(point.name == "Max") {
-						findBestGene(point.idx) // simulate if not null
+			(function showOptions(obj, prefix) {
+				for(var name in obj) {
+					if(typeof obj[name] === 'object') {
+						showOptions(obj[name], prefix + "-" + name);
+					} else {
+						$(prefix + "-" + name).text(obj[name]);
 					}
 				}
-			});
+			})(options, ".info-option");
 
-			$("#generation").text(1);
-			$("#max-fitness").text(0);
-			$("#avg-fitness").text(0);
-			simulation.on('generationEnd', function(e) {
-				var variance = 0;
-				for(var i = 0; i < e.worms.length; i++) {
-					variance += (e.averageFitness - e.worms[i].fitness) * (e.averageFitness - e.worms[i].fitness);
+			(function staticsUpdater() {
+				var $generation = $(".info-generation");
+				var $currentGen = $(".info-current-gen");
+				var $maxFitness = $(".info-fitness-max");
+				var $avgFitness = $(".info-fitness-avg");
+				var $midFitness = $(".info-fitness-mid");
+				var $stdevFitness = $(".info-fitness-stdev");
+
+				var showDeviation = false;
+
+				function defaultValues() {
+					$generation.text(0);
+					$currentGen.text(1);
+					$maxFitness.text(0);
+					$avgFitness.text(0);
+					$midFitness.text(0);
+
+					if(showDeviation) {
+						graphData = [[0, [0, 0], [0, 0], [0, 0]]];
+					} else {
+						graphData = [[0, 0, 0, 0]];
+					}
 				}
-				variance /= e.worms.length;
+				simulation.on('start', defaultValues);
+				defaultValues();
 
-				$("#generation").text(e.generation + 1);
-				$("#max-fitness").text(e.worms[0].fitness.toFixed(3));
-				$("#avg-fitness").text(e.averageFitness.toFixed(3));
+				graph = new Dygraph("historyChart", graphData, {
+					xlabel: "Generations",
+					ylabel: "Fitness",
+					labels: ["x", "Max", "Avg", "Mid"],
+					valueRange: [0, null],
+					errorBars: showDeviation,
+					legend: 'follow',
+					labelsSeparateLines: true,
+					//errorBars: true,
+					showRangeSelector: true,
+					pointClickCallback: function(e, point) {
+						if(point.name == "Max") {
+							console.log(findBestGene(point.idx)); // simulate if not null
+						}
+					}
+				});
 
-				if(showDeviation) {
-					graphData.push([e.generation, [e.worms[0].fitness, 0], [e.averageFitness, Math.sqrt(variance)], [e.worms[(e.worms.length / 2)|0].fitness, 0]]);
-				} else {
-					graphData.push([e.generation, e.worms[0].fitness, e.averageFitness, e.worms[(e.worms.length / 2)|0].fitness]);
-				}
-				
-				graph.updateOptions({'file': graphData});
-				//chart.update();
+				simulation.on('generationEnd', function(e) {
+					var gen = e.generation;
+					var best = e.worms[0].fitness;
+					var average = e.averageFitness;
+					var variance = 0;
+					for(var i = 0; i < e.worms.length; i++) {
+						variance += (average - e.worms[i].fitness) * (average - e.worms[i].fitness);
+					}
+					variance /= e.worms.length;
+					var stdev = Math.sqrt(variance);
+					var median = e.worms[(e.worms.length / 2)|0].fitness;
 
-				if(!geneEquals(e.worms[0].gene, findBestGene(e.generation - 1))) {
-					bestGenes[e.generation] = e.worms[0].gene;
-				}
-			});
-			$("#simulation").slideDown(function() {
-				window.onbeforeunload = function() {
-					return "Simulation is running. Are you sure to quit?";
-				};
+					$generation.text(gen);
+					$currentGen.text(gen + 1);
+					$maxFitness.text(best.toFixed(3));
+					$avgFitness.text(average.toFixed(3));
+					$midFitness.text(median.toFixed(3));
+					$stdevFitness.text(stdev.toFixed(3));
+
+					if(showDeviation) {
+						graphData.push([gen, [best, 0], [average, Math.sqrt(variance)], [median, 0]]);
+					} else {
+						graphData.push([gen, best, average, median]);
+					}
+					
+					graph.updateOptions({'file': graphData});
+					//chart.update();
+
+					if(!geneEquals(e.worms[0].gene, findBestGene(e.generation - 1))) {
+						bestGenes[gen] = e.worms[0].gene;
+					}
+				});
+			})();
+
+			(function stateUpdater() {
+				var $state = $(".info-state");
+				var $panel = $("#simulation-panel");
+
+				$state.text("Terminated");
+
+				simulation.on('start resume', function(e) {
+					$panel.removeClass("panel-primary panel-success panel-info panel-warning panel-danger")
+						.addClass("panel-info");
+					$state.text("Running");
+				});
+				simulation.on('pause', function(e) {
+					$panel.removeClass("panel-primary panel-success panel-info panel-warning panel-danger")
+						.addClass("panel-warning");
+					$state.text("Paused");
+				});
+				simulation.on('terminate', function(e) {
+					$panel.removeClass("panel-primary panel-success panel-info panel-warning panel-danger")
+						.addClass("panel-danger");
+					$state.text("Terminated");
+				});
+			})();
+
+			(function timeUpdater() {
+				var engineTime = 0;
+				var totalEngineTime = 0;
+
+				var timeStarted = 0;
+				var timeOffset = 0;
+
+				simulation.on('start', function(e) {
+					timeOffset = 0;
+					timeStarted = Date.now();
+				});
+				simulation.on('resume', function(e) {
+					timeStarted = Date.now();
+				});
+				simulation.on('pause terminate', function(e) {
+					timeOffset += Date.now() - timeStarted;
+					timeStarted = 0;
+				});
+
+				simulation.on('tick', function(e) {
+					engineTime = e.engineTime;
+					totalEngineTime = e.totalEngineTime;
+				});
+
+				var $simulationTime = $(".info-time-simulation");
+				var $totalTime = $(".info-time-total");
+				setInterval(function() {
+					$simulationTime.text((totalEngineTime / 1000).toFixed(2) + "s");
+
+					var runningTime = timeStarted > 0? Date.now() - timeStarted : 0;
+					$totalTime.text(((runningTime + timeOffset) / 1000).toFixed(2) + "s");
+				}, 100);
+			})();
+
+			$("#simulation-start").click(function() {
 				simulation.start();
+			});
+			$("#simulation-pause").click(function() {
+				simulation.pause();
+			});
+			$("#simulation-terminate").click(function() {
+				simulation.terminate();
+			});
+
+			$("#simulation").slideDown(function() {
+				$(window).on('beforeunload', function(e) {
+					return e.returnValue = "Simulation is running. Are you sure to quit?";
+				});
 			});
 		});
 		return false;
 	});
 
-	$("#export-graph").click(function() {
+	$("#export-statics").click(function() {
 		var elem = document.createElement('a');
-		var csv = "\ufeffGeneration,Maximum,Average,Median\n"; // utf-8 BOM
+		var csv = "\ufeffGeneration,Maximum,Average,Median,Gene\n"; // utf-8 BOM
 		for(var i = 0; i < graphData.length; i++) {
-			csv += graphData[i][0] + "," + graphData[i][1] + "," + graphData[i][2] + "," + graphData[i][3] + "\n";
+			csv += graphData[i][0] + "," + graphData[i][1] + "," + graphData[i][2] + "," + graphData[i][3] + ","
+					+ (bestGenes[i]? '"' + JSON.stringify(bestGenes[i]) + '"' : "") + "\n";
 		}
 		elem.setAttribute('href', "data:text/csv;charset=utf8," + encodeURIComponent(csv));
 		elem.setAttribute('download', "graph.csv");

@@ -32,6 +32,15 @@
 				width: auto;
 				border-radius: 3px;
 			}
+			.simulation-ops {
+				margin-bottom: 1em;
+			}
+			.options-wrapper {
+				margin-top: 1em;
+			}
+			.options-wrapper h4 {
+				margin-top: 0;
+			}
 		</style>
 	</head>
 	<body>
@@ -143,14 +152,45 @@
 			</div>
 		</div>
 
-		<div class="container-fluid" id="simulation" style="display: none">
+		<div class="container-fluid" id="simulation" style="display:none">
 			<div class="row">
 				<div class="col-xs-12">
-					<div class="panel panel-info">
+					<div class="panel panel-danger" id="simulation-panel">
 						<div class="panel-heading">
-							<h3 class="panel-title">Processing: Generation <span id="generation"></span></h3>
+							<h3 class="panel-title">
+								<span class="info-state">Terminated</span>: Generation <span class="info-current-gen"></span>
+							</h3>
 						</div>
 						<div class="panel-body">
+							<div class="btn-group simulation-ops">
+								<button class="btn btn-success" id="simulation-start">
+									<span class="glyphicon glyphicon-play" aria-hidden="true"></span> Start
+								</button>
+								<button class="btn btn-info" id="simulation-pause">
+									<span class="glyphicon glyphicon-pause" aria-hidden="true"></span> Pause
+								</button>
+								<button class="btn btn-default dropdown-toggle" data-toggle="dropdown">
+									<span class="caret"></span>
+								</button>
+
+								<ul class="dropdown-menu">
+									<li><a data-target="#" role="button" id="export-simulation">
+										<span class="glyphicon glyphicon-floppy-save" aria-hidden="true"></span> Save simulation
+									</a></li>
+									<li class="divider" role="separator"></li>
+									<li><a data-target="#" role="button" id="export-options">
+										<span class="glyphicon glyphicon-cog" aria-hidden="true"></span> Save simulation options
+									</a></li>
+									<li><a data-target="#" role="button" id="export-statics">
+										<span class="glyphicon glyphicon-stats" aria-hidden="true"></span> Save fitness statics
+									</a></li>
+									<li class="divider" role="separator"></li>
+									<li><a role="button" data-toggle="modal" data-target="#modal-termination">
+										<span class="glyphicon glyphicon-warning-sign" aria-hidden="true"></span> Terminate
+									</a></li>
+								</ul>
+							</div>
+
 							<ul class="nav nav-tabs">
 								<li class="active"><a href="#tab-status" data-toggle="tab">Status</a></li>
 								<li><a href="#tab-history" data-toggle="tab">History</a></li>
@@ -158,15 +198,70 @@
 
 							<div class="tab-content">
 								<div class="tab-pane active" id="tab-status">
-									<div class="page-header">
-										<h3>Simulation status</h3>
+									<div class="options-wrapper panel panel-default">
+										<div class="panel-heading">
+											<h3 class="panel-title">Project Setting</h3>
+										</div>
+										<div class="panel-body"><div class="row">
+											<div class="col-md-4 col-sm-6 col-xs-12">
+												<h4>Simulation options</h4>
+												<dl class="dl-horizontal">
+													<dt>Worms per gen</dt>
+													<dd class="info-option-simulation-wormsPerGeneration"></dd>
+													<dt>Preserved worms</dt>
+													<dd class="info-option-simulation-preservedWorms"></dd>
+													<dt>Simulation speed</dt>
+													<dd class="info-option-simulation-speedFactor"></dd>
+													<dt>Generation duration</dt>
+													<dd class="info-option-simulation-duration"></dd>
+												</dl>
+											</div>
+											<div class="col-md-4 col-sm-6 col-xs-12">
+												<h4>Worm options</h4>
+												<dl class="dl-horizontal">
+													<dt>Width</dt>
+													<dd class="info-option-worm-width"></dd>
+													<dt>Length</dt>
+													<dd class="info-option-worm-length"></dd>
+													<dt>Joints</dt>
+													<dd class="info-option-worm-joints"></dd>
+													<dt>Joint stiffness</dt>
+													<dd class="info-option-worm-stiffness"></dd>
+													<dt>Friction</dt>
+													<dd class="info-option-worm-friction"></dd>
+												</dl>
+											</div>
+											<div class="col-md-4 col-sm-6 col-xs-12">
+												<h4>Gene options</h4>
+												<dl class="dl-horizontal">
+													<dt>Phases</dt>
+													<dd class="info-option-gene-phases"></dd>
+													<dt>Operation period</dt>
+													<dd class="info-option-gene-period"></dd>
+													<dt>Mutation probability</dt>
+													<dd class="info-option-gene-mutation"></dd>
+												</dl>
+											</div>
+										</div></div>
 									</div>
-									<dl class="dl-horizontal">
-										<dt>Overall time spent</dt>
-										<dd id="overall-time"></dd>
-										<dt>Total simulation time</dt>
-										<dd id="simulation-time"></dd>
-									</dl>
+
+									<div class="page-header">
+										<h3>Current State <small class="info-state"></small></h3>
+									</div>
+									<div class="row">
+										<div class="col-xs-12">
+											<dl class="dl-horizontal">
+												<dt>Time spent</dt>
+												<dd class="info-time-total"></dd>
+												<dt>Time in simulation</dt>
+												<dd class="info-time-simulation"></dd>
+												<dt>Generations passed</dt>
+												<dd class="info-generation"></dd>
+												<dt>Best fitness</dt>
+												<dd class="info-fitness-max"></dd>
+											</dl>
+										</div>
+									</div>
 
 									<div class="page-header">
 										<h3>Running simulations</h3>
@@ -177,7 +272,6 @@
 									<div class="row">
 										<div class="col-sm-6 col-xs-12">
 											<div id="historyChart" style="width:100%"></div>
-											<button class="btn btn-link" id="export-graph">Export CSV...</button>
 										</div>
 										<div class="col-sm-6 col-xs-12">
 											<div class="page-header">
@@ -185,15 +279,44 @@
 											</div>
 											<dl class="dl-horizontal">
 												<dt>Maximum fitness</dt>
-												<dd id="max-fitness"></dd>
+												<dd class="info-fitness-max"></dd>
 												<dt>Average fitness</dt>
-												<dd id="avg-fitness"></dd>
+												<dd class="info-fitness-avg"></dd>
+												<dt>Median fitness</dt>
+												<dd class="info-fitness-mid"></dd>
+												<dt>Standard deviation</dt>
+												<dd class="info-fitness-stdev"></dd>
 											</dl>
+										</div>
+										<div class="col-xs-12" id="rerun" style="display:none">
+											<div class="page-header">
+												<h3>Simulation</h3>
+											</div>
+											<div id="rerun-render"></div>
 										</div>
 									</div>
 								</div>
 							</div>
 						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="modal fade" tabindex="-1" role="dialog" id="modal-termination">
+			<div class="modal-dialog" role="document">
+				<div class="modal-content">
+					<div class="modal-header">
+						<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+						<h4 class="modal-title"><span class="glyphicon glyphicon-exclamation-sign" aria-hidden="true"></span> Warning!</h4>
+					</div>
+					<div class="modal-body">
+						<p>You are trying to terminate the simulation session. When terminated, the <b class="text-uppercase">whole</b> progress will be lost if you start a simulation again.</p>
+						<p>The simulation should be saved to prevent data loss. Are you sure to continue?</p>
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+						<button type="button" class="btn btn-danger" id="simulation-terminate" data-dismiss="modal">Terminate now</button>
 					</div>
 				</div>
 			</div>

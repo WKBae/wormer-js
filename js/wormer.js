@@ -6,13 +6,13 @@ var defaults = {
 		preservedWorms: 3,
 		timestep: 1000 / 60,
 		speedFactor: 0,
-		until: 15000,
+		duration: 15000,
 		end: 50
 	},
 	worm: {
 		width: 10,
 		length: 100,
-		foldings: 8,
+		joints: 8,
 		stiffness: 0.4,
 		friction: 0.1
 	},
@@ -47,40 +47,36 @@ function setupSimulation(options) {
 	var WORLD_WIDTH = 2000,
 		WORLD_HEIGHT = 300;
 
-	var engines = [];
-	var worms = [];
-	var renders = [];
-
-	var phase, period;
-	var elaspedEngineTime, elaspedTotal;
-
-	var generation;
-
-	var stepTimeout = 0, doPause = false;
-
-	var simulation;
-
-	options = Common.extend(defaults, options);
-
-	simulation = {
+	var sim = {
 		start: start,
 		pause: pause,
 		resume: resume,
 		on: function(eventNames, callback) {
-			return Events.on(simulation, eventNames, callback);
+			return Events.on(sim, eventNames, callback);
 		},
 		off: function(eventNames, callback) {
-			Events.off(simulation, eventNames, callback);
+			Events.off(sim, eventNames, callback);
 		},
-		getWorms: function() {
-			return worms;
-		}
+
+		_options: Common.extend(defaults, options),
+		
+		_engines: [],
+		_worms: [],
+
+		_generation: 0,
+
+		_phase: 0,
+		_period: 0,
+		_engineTime: 0,
+		_totalEngineTime: 0,
+
+		_stepTimeout: 0,
+		_doPause: false
 	};
 
-	for(var i = 0; i < options.simulation.wormsPerGeneration; i++) {
-		engines[i] = setupEngine(createEngine());
-		worms[i] = createWorm(engines[i]);
-		if(options.render.enabled) renders[i] = createRender(i, engines[i]);
+	for(var i = 0; i < sim._options.simulation.wormsPerGeneration; i++) {
+		sim._engines[i] = setupEngine(createEngine());
+		sim._worms[i] = createWorm(sim._engines[i]);
 	}
 
 	function createEngine() {
@@ -111,7 +107,7 @@ function setupSimulation(options) {
 
 		World.add(engine.world, ground);
 
-		Events.trigger(simulation, 'setupEngine', {engine: engine});
+		Events.trigger(sim, 'setupEngine', {engine: engine});
 
 		return engine;
 	}
@@ -120,15 +116,15 @@ function setupSimulation(options) {
 		// @const
 		var BEGIN_X = 50;
 
-		var divLength = options.worm.length / options.worm.foldings;
-		var halfWidth = options.worm.width / 2;
+		var divLength = sim._options.worm.length / sim._options.worm.joints;
+		var halfWidth = sim._options.worm.width / 2;
 		var bodyParts = [];
 		var constraints = [];
-		for(var i = 0; i < options.worm.foldings; i++) {
-			var newBody = Bodies.rectangle(BEGIN_X + divLength / 2 + divLength * i, WORLD_HEIGHT - halfWidth, divLength - 1, options.worm.width, {
-				friction: options.worm.friction,
+		for(var i = 0; i < sim._options.worm.joints; i++) {
+			var newBody = Bodies.rectangle(BEGIN_X + divLength / 2 + divLength * i, WORLD_HEIGHT - halfWidth, divLength - 1, sim._options.worm.width, {
+				friction: sim._options.worm.friction,
 				render: {
-					fillStyle: (i == options.worm.foldings - 2)? "#E77" : "#FAA",
+					fillStyle: (i == sim._options.worm.joints - 2)? "#E77" : "#FAA",
 					strokeStyle: "#F88"
 				}
 			});
@@ -138,7 +134,7 @@ function setupSimulation(options) {
 					pointA: { x: divLength / 2 - 1, y: -halfWidth },
 					bodyB: newBody,
 					pointB: { x: -divLength / 2, y: -halfWidth },
-					stiffness: options.worm.stiffness,
+					stiffness: sim._options.worm.stiffness,
 					length: 2,
 					render: {
 						strokeStyle: "#F88"
@@ -149,7 +145,7 @@ function setupSimulation(options) {
 					pointA: { x: divLength / 2 - 1, y: halfWidth },
 					bodyB: newBody,
 					pointB: { x: -divLength / 2, y: halfWidth },
-					stiffness: options.worm.stiffness,
+					stiffness: sim._options.worm.stiffness,
 					length: 2,
 					render: {
 						strokeStyle: "#F88"
@@ -171,15 +167,15 @@ function setupSimulation(options) {
 
 	function createRender(i, engine) {
 		return Render.create({
-			element: options.render.createRenderWrapper(i),
+			element: sim._options.render.createRenderWrapper(i),
 			engine: engine,
 			bounds: {
 				min: { x: 0, y: 0 },
-				max: { x: options.render.width / options.render.scale, y: options.render.height / options.render.scale }
+				max: { x: sim._options.render.width / sim._options.render.scale, y: sim._options.render.height / sim._options.render.scale }
 			},
 			options: {
-				width: options.render.width,
-				height: options.render.height,
+				width: sim._options.render.width,
+				height: sim._options.render.height,
 				wireframes: false,
 				hasBounds: true
 			}
@@ -188,13 +184,13 @@ function setupSimulation(options) {
 
 	function createRandomGene() {
 		var gene = [];
-		var constraintCount = (options.worm.foldings - 1) * 2;
+		var constraintCount = (sim._options.worm.joints - 1) * 2;
 		for(var i = 0; i < constraintCount; i++) {
 			gene[i] = [];
-			for(var j = 0; j < options.gene.phases / 32; j++) {
+			for(var j = 0; j < sim._options.gene.phases / 32; j++) {
 				gene[i][j] = Math.random() * (1 << 16) | 0;
 
-				if(options.gene.phases >= j * 32 + 16) {
+				if(sim._options.gene.phases >= j * 32 + 16) {
 					gene[i][j] |= Math.random() * (1 << 16) << 16;
 				}
 			}
@@ -224,8 +220,8 @@ function setupSimulation(options) {
 
 	function crossover(worm1, worm2) {
 		var newGene = [];
-		for(var i = 0; i < (options.worm.foldings - 1) * 2; i++) {
-			var point = (Math.random() * options.gene.phases) | 0;
+		for(var i = 0; i < (sim._options.worm.joints - 1) * 2; i++) {
+			var point = (Math.random() * sim._options.gene.phases) | 0;
 			var pointLoc = (point / 32) | 0;
 			var pointPos = point % 32;
 			var pointMask = ((1 << pointPos) - 1) | 0;
@@ -235,7 +231,7 @@ function setupSimulation(options) {
 				newChrono[j] = worm1.gene[i][j];
 			}
 			newChrono[pointLoc] = (worm1.gene[i][pointLoc] & pointMask) | (worm2.gene[i][pointLoc] & ~pointMask);
-			for(var j = pointLoc + 1; j < options.gene.phases / 32; j++) {
+			for(var j = pointLoc + 1; j < sim._options.gene.phases / 32; j++) {
 				newChrono[j] = worm2.gene[i][j];
 			}
 
@@ -246,9 +242,9 @@ function setupSimulation(options) {
 
 	function mutate(gene) {
 		for(var i = 0; i < gene.length; i++) {
-			for(var j = 0; j < /*gene[i].length*/ options.gene.phases / 32; j++) {
-				for(var k = 0; k < 32 && j * 32 + k < options.gene.phases; k++) {
-					if(Math.random() <= options.gene.mutation) {
+			for(var j = 0; j < /*gene[i].length*/ sim._options.gene.phases / 32; j++) {
+				for(var k = 0; k < 32 && j * 32 + k < sim._options.gene.phases; k++) {
+					if(Math.random() <= sim._options.gene.mutation) {
 						gene[i][j] ^= 1 << k
 					}
 				}
@@ -258,34 +254,34 @@ function setupSimulation(options) {
 	}
 
 	function stepWorld() {
-		Events.trigger(simulation, 'beforeTick');
-		for(var i = 0; i < options.simulation.wormsPerGeneration; i++) {
-			applyMovement(worms[i].constraints, worms[i].gene, phase);
-			Engine.update(engines[i], options.simulation.timestep);
+		Events.trigger(sim, 'beforeTick');
+		for(var i = 0; i < sim._options.simulation.wormsPerGeneration; i++) {
+			applyMovement(sim._worms[i].constraints, sim._worms[i].gene, sim._phase);
+			Engine.update(sim._engines[i], sim._options.simulation.timestep);
 		}
 
-		period++;
-		if(period >= options.gene.period) {
-			period = 0;
-			phase++;
-			if(phase >= options.gene.phases) {
-				phase = 0;
+		sim._period++;
+		if(sim._period >= sim._options.gene.period) {
+			sim._period = 0;
+			sim._phase++;
+			if(sim._phase >= sim._options.gene.phases) {
+				sim._phase = 0;
 			}
 		}
 
-		elaspedEngineTime += options.simulation.timestep;
-		elaspedTotal += options.simulation.timestep;
+		sim._engineTime += sim._options.simulation.timestep;
+		sim._totalEngineTime += sim._options.simulation.timestep;
 
-		Events.trigger(simulation, 'afterTick tick', {
-			engineTime: elaspedEngineTime,
-			totalEngineTime: elaspedTotal
+		Events.trigger(sim, 'afterTick tick', {
+			engineTime: sim._engineTime,
+			totalEngineTime: sim._totalEngineTime
 		});
 
-		if(elaspedEngineTime < options.simulation.until) {
-			stepTimeout = setTimeout(stepWorld, options.simulation.timestep * options.simulation.speedFactor);
+		if(sim._engineTime < sim._options.simulation.duration) {
+			sim._stepTimeout = setTimeout(stepWorld, sim._options.simulation.timestep * sim._options.simulation.speedFactor);
 		/* TODO
-		} else if(generation >= options.simulation.end) {
-			if(options.render.enabled) {
+		} else if(sim._generation >= sim._options.simulation.end) {
+			if(sim._options.render.enabled) {
 				for(var i = 0; i < renders.length; i++) {
 					Render.stop(renders[i]);
 				}
@@ -294,110 +290,110 @@ function setupSimulation(options) {
 		*/
 		} else {
 			proceedGeneration();
-			period = 0;
-			phase = 0;
-			elaspedEngineTime = 0;
-			generation++;
-			stepTimeout = setTimeout(stepWorld, options.simulation.timestep * options.simulation.speedFactor);
+			sim._period = 0;
+			sim._phase = 0;
+			sim._engineTime = 0;
+			sim._generation++;
+			sim._stepTimeout = setTimeout(stepWorld, sim._options.simulation.timestep * sim._options.simulation.speedFactor);
 		}
 	}
 	
 	function start() {
-		period = 0;
-		phase = 0;
-		elaspedEngineTime = 0;
-		elaspedTotal = 0;
-		generation = 1;
+		sim._period = 0;
+		sim._phase = 0;
+		sim._engineTime = 0;
+		sim._totalEngineTime = 0;
+		sim._generation = 1;
 
-		if(options.render.enabled) {
+		if(sim._options.render.enabled) {
 			for(var i = 0; i < renders.length; i++) {
 				Render.run(renders[i]);
 			}
 		}
 
-		Events.trigger(simulation, 'start');
-		stepTimeout = setTimeout(stepWorld, 0);
+		Events.trigger(sim, 'start');
+		sim._stepTimeout = setTimeout(stepWorld, 0);
 	}
 
 	function pause() {
-		clearTimeout(stepTimeout);
-		stepTimeout = 0;
-		Events.trigger(simulation, 'pause');
+		clearTimeout(sim._stepTimeout);
+		sim._stepTimeout = 0;
+		Events.trigger(sim, 'pause');
 	}
 	function resume() {
-		Events.trigger(simulation, 'resume');
-		stepTimeout = setTimeout(stepWorld, 0);
+		Events.trigger(sim, 'resume');
+		sim._stepTimeout = setTimeout(stepWorld, 0);
 	}
 
 	function end() {
-		clearTimeout(stepTimeout);
-		stepTimeout = 0;
+		clearTimeout(sim._stepTimeout);
+		sim._stepTimeout = 0;
 		/* TODO */
-		Events.trigger(simulation, 'end');
+		Events.trigger(sim, 'end');
 	}
 
 	function proceedGeneration() {
 		var averageFitness;
 		var totalFitness = 0;
-		for(var i = 0; i < options.simulation.wormsPerGeneration; i++) {
-			worms[i].fitness = fitness(worms[i]);
+		for(var i = 0; i < sim._options.simulation.wormsPerGeneration; i++) {
+			sim._worms[i].fitness = fitness(sim._worms[i]);
 
-			totalFitness += worms[i].fitness;
+			totalFitness += sim._worms[i].fitness;
 
-			//setupEngine(engines[i]);
-			World.clear(engines[i].world, true);
+			//setupEngine(sim._engines[i]);
+			World.clear(sim._engines[i].world, true);
 		}
-		averageFitness = totalFitness / options.simulation.wormsPerGeneration;
+		averageFitness = totalFitness / sim._options.simulation.wormsPerGeneration;
 
-		worms.sort(wormFitnessCompare);
+		sim._worms.sort(wormFitnessCompare);
 
-		Events.trigger(simulation, 'generationEnd', {
-			generation: generation,
-			worms: worms,
+		Events.trigger(sim, 'generationEnd', {
+			generation: sim._generation,
+			worms: sim._worms,
 			averageFitness: averageFitness
 		});
 
 		var newWorms = [];
 
-		for(var i = 0; i < options.simulation.preservedWorms; i++) {
-			newWorms[i] = createWorm(engines[i], worms[i].gene);
+		for(var i = 0; i < sim._options.simulation.preservedWorms; i++) {
+			newWorms[i] = createWorm(sim._engines[i], sim._worms[i].gene);
 		}
-		for(var i = options.simulation.preservedWorms; i < options.simulation.wormsPerGeneration; i++) {
+		for(var i = sim._options.simulation.preservedWorms; i < sim._options.simulation.wormsPerGeneration; i++) {
 			// Roulette wheel selection
 			var selected1 = Math.random() * totalFitness,
 				selected2 = Math.random() * totalFitness;
 			var worm1 = null,
 				worm2 = null;
-			for(var j = 0; j < worms.length; j++) {
-				selected1 -= fitness(worms[j]);
-				selected2 -= fitness(worms[j]);
+			for(var j = 0; j < sim._worms.length; j++) {
+				selected1 -= fitness(sim._worms[j]);
+				selected2 -= fitness(sim._worms[j]);
 
 				if(selected1 <= 0 && !worm1) {
-					worm1 = worms[j];
+					worm1 = sim._worms[j];
 				}
 				if(selected2 <= 0 && !worm2) {
-					worm2 = worms[j];
+					worm2 = sim._worms[j];
 				}
 				if(worm1 && worm2) {
 					break;
 				}
 			}
 			var newGene = crossover(worm1, worm2);
-			newWorms[i] = createWorm(engines[i], newGene)
+			newWorms[i] = createWorm(sim._engines[i], newGene)
 		}
 
-		worms = newWorms;
+		sim._worms = newWorms;
 	}
 
 	function addOnGenerationEndListener(listener) {
 		generationListeners.push(listener); // TODO rename to generation end listener
 	}
 
-	return simulation;
+	return sim;
 }
 
 $(function() {
-	var graphData = [[0, [0, 0], [0, 0], [0, 0]]];
+	var graphData;
 	var graph;
 	var bestGenes = [null];
 	function findBestGene(idx) {
@@ -427,13 +423,13 @@ $(function() {
 					wormsPerGeneration: parseInt($("#worms-per-gen").val(), 10),
 					preservedWorms: parseInt($("#preserved-worms").val(), 10),
 					speedFactor: parseFloat($("#speed").val()),
-					until: parseInt($("#until").val(), 10),
+					duration: parseInt($("#duration").val(), 10),
 					end: parseInt($("#end").val(), 10)
 				},
 				worm: {
 					width: parseInt($("#width").val(), 10),
 					length: parseInt($("#length").val(), 10),
-					foldings: parseInt($("#foldings").val(), 10),
+					joints: parseInt($("#joints").val(), 10),
 					stiffness: parseFloat($("#stiffness").val()),
 					friction: parseFloat($("#friction").val())
 				},
@@ -450,66 +446,18 @@ $(function() {
 			var simulation = setupSimulation(options);
 			window.simulation = simulation;
 
-			/*var genLabels = [0];
-			var maxFitness = [0];
-			var avgFitness = [0];*/
-
-			/*var chart = new Chart($("#historyChart"), {
-				type: 'line',
-				data: {
-					labels: genLabels,
-					datasets: [
-						{
-							type: 'line',
-							label: "Maximum fitness",
-							backgroundColor: "rgba(255, 128, 128, 0.3)",
-							borderColor: "rgba(255, 128, 128, 1)",
-							pointBorderColor: "rgba(255, 128, 128, 1)",
-							tension: 0,
-							data: maxFitness
-						},
-						{
-							type: 'line',
-							label: "Average fitness",
-							backgroundColor: "rgba(128, 128, 255, 0.3)",
-							borderColor: "rgba(128, 128, 255, 1)",
-							pointBorderColor: "rgba(128, 128, 255, 1)",
-							tension: 0,
-							data: avgFitness
-						}
-					]
-				},
-				options: {
-					//tooltips: {mode:'index'},
-					scales: {
-						xAxes: [{
-							ticks: {
-								autoSkip: true,
-								suggestedMin: 0
-							}
-						}],
-						yAxes: [{
-							ticks: {
-								suggestedMin: 0,
-								//suggestedMax: 100
-							}
-						}]
-					}
-				}
-			});
-			$("#historyChart").click(function(e) {
-				var element = chart.getElementAtEvent(e);
-				if(element && element.length == 1 && element[0]._datasetIndex == 0 /* Maximum fitness *) {
-					console.log(bestGenes[element[0]._index]); // TODO show simulation
-				}
-			});*/
-			var graphElem = document.getElementById("historyChart");
-			graph = new Dygraph(graphElem, graphData, {
+			var showDeviation = false;
+			if(showDeviation) {
+				graphData = [[0, [0, 0], [0, 0], [0, 0]]];
+			} else {
+				graphData = [[0, 0, 0, 0]];
+			}
+			graph = new Dygraph("historyChart", graphData, {
 				xlabel: "Generations",
 				ylabel: "Fitness",
 				labels: ["x", "Max", "Avg", "Mid"],
 				valueRange: [0, null],
-				errorBars: true,
+				errorBars: showDeviation,
 				legend: 'follow',
 				labelsSeparateLines: true,
 				//errorBars: true,
@@ -520,34 +468,32 @@ $(function() {
 					}
 				}
 			});
-			//graph.resize();
 
 			$("#generation").text(1);
 			$("#max-fitness").text(0);
 			$("#avg-fitness").text(0);
 			simulation.on('generationEnd', function(e) {
-				var gen = e.generation;
-				$("#generation").text(gen + 1);
-				$("#max-fitness").text(e.worms[0].fitness.toFixed(3));
-				$("#avg-fitness").text(e.averageFitness.toFixed(3));
-
-				/*genLabels[gen] = e.generation;
-				avgFitness[gen] = e.averageFitness;
-				maxFitness[gen] = e.worms[0].fitness;
-				bestGenes[gen] = e.worms[0].gene;*/
-
 				var variance = 0;
 				for(var i = 0; i < e.worms.length; i++) {
 					variance += (e.averageFitness - e.worms[i].fitness) * (e.averageFitness - e.worms[i].fitness);
 				}
 				variance /= e.worms.length;
 
-				graphData.push([e.generation, [e.worms[0].fitness, 0], [e.averageFitness, Math.sqrt(variance)], [e.worms[(e.worms.length / 2)|0].fitness, 0]]);
+				$("#generation").text(e.generation + 1);
+				$("#max-fitness").text(e.worms[0].fitness.toFixed(3));
+				$("#avg-fitness").text(e.averageFitness.toFixed(3));
+
+				if(showDeviation) {
+					graphData.push([e.generation, [e.worms[0].fitness, 0], [e.averageFitness, Math.sqrt(variance)], [e.worms[(e.worms.length / 2)|0].fitness, 0]]);
+				} else {
+					graphData.push([e.generation, e.worms[0].fitness, e.averageFitness, e.worms[(e.worms.length / 2)|0].fitness]);
+				}
+				
 				graph.updateOptions({'file': graphData});
 				//chart.update();
 
-				if(!geneEquals(e.worms[0].gene, findBestGene(gen-1))) {
-					bestGenes[gen] = e.worms[0].gene;
+				if(!geneEquals(e.worms[0].gene, findBestGene(e.generation - 1))) {
+					bestGenes[e.generation] = e.worms[0].gene;
 				}
 			});
 			$("#simulation").slideDown(function() {

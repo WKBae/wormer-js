@@ -1,37 +1,7 @@
-"use strict";
 
-var defaults = {
-	simulation: {
-		wormsPerGeneration: 30,
-		preservedWorms: 4,
-		timestep: 1000 / 60,
-		speedFactor: 0,
-		duration: 15000
-	},
-	worm: {
-		width: 10,
-		length: 100,
-		joints: 4,
-		stiffness: 0.4,
-		friction: 0.5
-	},
-	gene: {
-		phases: 128,
-		period: 5, // timesteps of world passed between each phase
-		mutation: 0.01
-	},
-	render: { // TODO move render out, independent of simulation
-		enabled: true,
-		width: 1000,
-		height: 150,
-		scale: 0.5,
-		createRenderWrapper: function(i) {
-			return $('<div class="render col-lg-6 col-xs-12" id="render-'+i+'"></div>').appendTo("#renders")[0];
-		}
-	}
-};
+var Wormer = (function() {
+	"use strict";
 
-function setupSimulation(options) {
 	// @const
 	var Common = Matter.Common,
 		Events = Matter.Events,
@@ -40,376 +10,514 @@ function setupSimulation(options) {
 		World = Matter.World,
 		Body = Matter.Body,
 		Bodies = Matter.Bodies,
-		Constraint = Matter.Constraint;
+		Constraint = Matter.Constraint,
+		Composite = Matter.Composite;
 
 	// @const
 	var WORLD_WIDTH = 2000,
 		WORLD_HEIGHT = 300;
 
-	var sim = {
-		start: start,
-		pause: pause,
-		resume: resume,
-		terminate: terminate,
-
-		on: function(eventNames, callback) {
-			return Events.on(sim, eventNames, callback);
+	var defaults = {
+		simulation: {
+			wormsPerGeneration: 30,
+			preservedWorms: 4,
+			timestep: 1000 / 60,
+			speedFactor: 0,
+			duration: 15000
 		},
-		off: function(eventNames, callback) {
-			Events.off(sim, eventNames, callback);
+		worm: {
+			width: 10,
+			length: 100,
+			joints: 4,
+			stiffness: 0.4,
+			friction: 0.5
 		},
-
-		_options: Common.extend(defaults, options),
-		
-		_engines: [],
-		_worms: [],
-
-		_generation: 0,
-
-		_phase: 0,
-		_period: 0,
-		_engineTime: 0,
-		_totalEngineTime: 0,
-
-		_isStarted: false,
-		_stepTimeout: 0,
-		_isPaused: false
+		gene: {
+			phases: 128,
+			period: 5, // timesteps of world passed between each phase
+			mutation: 0.01
+		},
+		render: { // TODO move render out, independent of simulation
+			enabled: true,
+			width: 1000,
+			height: 150,
+			scale: 0.5,
+			createRenderWrapper: function(i) {
+				return $('<div class="render col-lg-6 col-xs-12" id="render-'+i+'"></div>').appendTo("#renders")[0];
+			}
+		}
 	};
 
-	for(var i = 0; i < sim._options.simulation.wormsPerGeneration; i++) {
-		sim._engines[i] = setupEngine(createEngine());
-		sim._worms[i] = createWorm(sim._engines[i]);
-	}
+	var Simulation = (function() {
+		function Simulation(options) {
+			var self = this;
 
-	function createEngine() {
-		return Engine.create(); // any options?
-	}
+			Object.defineProperty(self, 'options', {
+				value: deepFreeze(Common.extend(defaults, options)),
+				configurable: false,
+				enumerable: true,
+				writable: false
+			});
 
-	function setupEngine(engine) {
-		Engine.clear(engine);
+			self.engines = [];
+			self.worms = [];
 
-		var ground = Body.create({
-			parts: [
-				Bodies.rectangle(WORLD_WIDTH / 2 - 50, WORLD_HEIGHT + 25, WORLD_WIDTH + 50, 50, {
-					friction: 1,
-					render: {
-						fillStyle: "#555",
-						strokeStyle: "#000"
+			self.generation = 0;
+			self.phase = 0;
+			self.period = 0;
+
+			self.generationTime = 0;
+			self.totalEngineTime = 0;
+
+			self._isStarted = false;
+			self._isPaused = false;
+			self._stepTimeout = 0;
+
+			self._stepWorld = stepWorld;
+
+			for(var i = 0; i < self.options.simulation.wormsPerGeneration; i++) {
+				self.engines[i] = setupEngine(createEngine());
+				self.worms[i] = new Worm(options).attachTo(self.engines[i]);
+			}
+
+			function createEngine() {
+				return Engine.create(); // any options?
+			}
+
+			function setupEngine(engine) {
+				Engine.clear(engine);
+
+				var ground = Body.create({
+					parts: [
+						Bodies.rectangle(WORLD_WIDTH / 2 - 50, WORLD_HEIGHT + 25, WORLD_WIDTH + 50, 50, {
+							friction: 1,
+							render: {
+								fillStyle: "#555",
+								strokeStyle: "#000"
+							}
+						}),
+						Bodies.rectangle(-25, WORLD_HEIGHT / 2, 50, WORLD_HEIGHT, {
+							render: {
+								fillStyle: "#555",
+								strokeStyle: "#000"
+							}
+						}),
+					],
+					isStatic: true
+				});
+
+				World.add(engine.world, ground);
+
+				Events.trigger(self, 'setupEngine', {engine: engine});
+
+				return engine;
+			}
+
+			function createRender(i, engine) {
+				return Render.create({
+					element: self.options.render.createRenderWrapper(i),
+					engine: engine,
+					bounds: {
+						min: { x: 0, y: 0 },
+						max: { x: self.options.render.width / self.options.render.scale, y: self.options.render.height / self.options.render.scale }
+					},
+					options: {
+						width: self.options.render.width,
+						height: self.options.render.height,
+						wireframes: false,
+						hasBounds: true
 					}
-				}),
-				Bodies.rectangle(-25, WORLD_HEIGHT / 2, 50, WORLD_HEIGHT, {
-					render: {
-						fillStyle: "#555",
-						strokeStyle: "#000"
+				});
+			}
+
+			function wormFitnessCompare(worm1, worm2) {
+				return worm2.fitness - worm1.fitness;
+			}
+
+			function stepWorld() {
+				Events.trigger(self, 'beforeTick');
+				for(var i = 0; i < self.options.simulation.wormsPerGeneration; i++) {
+					self.worms[i]._tick(self.generationTime, self.phase);
+					Engine.update(self.engines[i], self.options.simulation.timestep);
+				}
+
+				self.period++;
+				if(self.period >= self.options.gene.period) {
+					self.period = 0;
+					self.phase++;
+					if(self.phase >= self.options.gene.phases) {
+						self.phase = 0;
 					}
-				}),
-			],
-			isStatic: true
-		});
+				}
 
-		World.add(engine.world, ground);
+				self.generationTime += self.options.simulation.timestep;
+				self.totalEngineTime += self.options.simulation.timestep;
 
-		Events.trigger(sim, 'setupEngine', {engine: engine});
+				Events.trigger(self, 'afterTick tick', {
+					generationTime: self.generationTime,
+					totalEngineTime: self.totalEngineTime
+				});
 
-		return engine;
-	}
+				if(self.generationTime < self.options.simulation.duration) {
+					self._stepTimeout = setTimeout(stepWorld, self.options.simulation.timestep * self.options.simulation.speedFactor);
+				} else {
+					proceedGeneration();
+					self.period = 0;
+					self.phase = 0;
+					self.generationTime = 0;
+					self.generation++;
+					self._stepTimeout = setTimeout(stepWorld, self.options.simulation.timestep * self.options.simulation.speedFactor);
+				}
+			}
 
-	function createWorm(engine, gene) {
-		// @const
-		var BEGIN_X = 50;
+			function proceedGeneration() {
+				var averageFitness;
+				var totalFitness = 0;
+				for(var i = 0; i < self.options.simulation.wormsPerGeneration; i++) {
+					self.worms[i].fitness = self.worms[i]._fitness();
 
-		var divLength = sim._options.worm.length / sim._options.worm.joints;
-		var halfWidth = sim._options.worm.width / 2;
-		var bodyParts = [];
-		var constraints = [];
-		for(var i = 0; i < sim._options.worm.joints; i++) {
-			var newBody = Bodies.rectangle(BEGIN_X + divLength / 2 + divLength * i, WORLD_HEIGHT - halfWidth, divLength - 1, sim._options.worm.width, {
-				friction: sim._options.worm.friction,
-				render: {
-					fillStyle: (i == sim._options.worm.joints - 2)? "#E77" : "#FAA",
-					strokeStyle: "#F88"
+					totalFitness += self.worms[i].fitness;
+
+					//setupEngine(self._engines[i]);
+					//World.clear(self.engines[i].world, true);
+					self.worms[i].detach(true);
+				}
+				averageFitness = totalFitness / self.options.simulation.wormsPerGeneration;
+
+				self.worms.sort(wormFitnessCompare);
+
+				Events.trigger(self, 'generationEnd', {
+					generation: self.generation,
+					worms: self.worms,
+					averageFitness: averageFitness
+				});
+
+				var newWorms = [];
+
+				for(var i = 0; i < self.options.simulation.preservedWorms; i++) {
+					newWorms[i] = new Worm(options, self.worms[i].gene).attachTo(self.engines[i]);
+				}
+				for(var i = self.options.simulation.preservedWorms; i < self.options.simulation.wormsPerGeneration; i++) {
+					// Roulette wheel selection
+					var selected1 = Math.random() * totalFitness,
+						selected2 = Math.random() * totalFitness;
+					var worm1 = null,
+						worm2 = null;
+					for(var j = 0; j < self.worms.length; j++) {
+						selected1 -= self.worms[j].fitness;
+						selected2 -= self.worms[j].fitness;
+
+						if(selected1 <= 0 && !worm1) {
+							worm1 = self.worms[j];
+						}
+						if(selected2 <= 0 && !worm2) {
+							worm2 = self.worms[j];
+						}
+						if(worm1 && worm2) {
+							break;
+						}
+					}
+					var newGene = new Gene(options, worm1.gene, worm2.gene);
+					newWorms[i] = new Worm(options, newGene).attachTo(self.engines[i]);
+				}
+
+				self.worms = newWorms;
+			}
+		}
+
+		Simulation.prototype = {
+			start: function() {
+				if(this._isStarted) {
+					if(this._isPaused) {
+						this.resume();
+					}
+					return;
+				}
+
+				this.generation = 1;
+				this.period = 0;
+				this.phase = 0;
+
+				this.generationTime = 0;
+				this.totalEngineTime = 0;
+
+				this._isStarted = true;
+				this._isPaused = false;
+
+				Events.trigger(this, 'start', {
+					options: this.options
+				});
+				this._stepTimeout = setTimeout(this._stepWorld, 0);
+			},
+			pause: function() {
+				if(!this._isStarted || this._isPaused) return false;
+
+				clearTimeout(this._stepTimeout);
+				this._stepTimeout = 0;
+				this._isPaused = true;
+
+				Events.trigger(this, 'pause');
+
+				return this._isStarted && this._isPaused; // state can be changed in event handlers
+			},
+			resume: function() {
+				if(!this._isStarted || !this._isPaused) return false;
+
+				this._isPaused = false;
+				this._stepTimeout = setTimeout(this._stepWorld, 0);
+
+				Events.trigger(this, 'resume');
+
+				return this._isStarted && !this._isPaused;
+			},
+			terminate: function() {
+				if(!this._isStarted) return false;
+
+				clearTimeout(this._stepTimeout);
+				this._stepTimeout = 0;
+				this._isStarted = false;
+				this._isPaused = false;
+				
+				Events.trigger(this, 'terminate');
+
+				return !this._isStarted;
+			},
+
+			on: function(eventNames, callback) {
+				return Events.on(this, eventNames, callback);
+			},
+			off: function(eventNames, callback) {
+				Events.off(this, eventNames, callback);
+			}
+		};
+
+		function deepFreeze (o) {
+			Object.freeze(o);
+			if (o === undefined) {
+				return o;
+			}
+
+			Object.getOwnPropertyNames(o).forEach(function (prop) {
+				if (o[prop] !== null
+				&& (typeof o[prop] === "object" || typeof o[prop] === "function")
+				&& !Object.isFrozen(o[prop])) {
+					deepFreeze(o[prop]);
 				}
 			});
-			if(i > 0) {
-				constraints.push(Constraint.create({
-					bodyA: bodyParts[i - 1],
-					pointA: { x: divLength / 2 - 1, y: -halfWidth },
-					bodyB: newBody,
-					pointB: { x: -divLength / 2, y: -halfWidth },
-					stiffness: sim._options.worm.stiffness,
-					length: 2,
-					render: {
-						strokeStyle: "#F88"
-					}
-				}));
-				constraints.push(Constraint.create({
-					bodyA: bodyParts[i - 1],
-					pointA: { x: divLength / 2 - 1, y: halfWidth },
-					bodyB: newBody,
-					pointB: { x: -divLength / 2, y: halfWidth },
-					stiffness: sim._options.worm.stiffness,
-					length: 2,
-					render: {
-						strokeStyle: "#F88"
-					}
-				}));
-			}
-			bodyParts.push(newBody);
+
+			return o;
 		}
 
-		World.add(engine.world, bodyParts);
-		World.add(engine.world, constraints);
+		return Simulation;
+	})();
 
-		return {
-			body: bodyParts,
-			constraints: constraints,
-			gene: gene? gene : createRandomGene()
-		};
-	}
+	var Gene = (function() {
+		/**
+		 * 2D Array & 32-bit integer implementation of gene
+		 * may switch to String-based, TypedArray-based, ... if the prototypes are implemented correctly.
+		 */
+		function Gene(options, parent1, parent2) {
+			if(parent1 && !parent2) {
+				// Copy single gene
+				this._gene = [];
+				for(var i = 0; i < parent1._gene.length; i++) {
+					this._gene[i] = [];
+					for(var j = 0; j < parent1._gene[i].length; j++) {
+						this._gene[i][j] = parent1._gene[i][j];
+					}
+				}
+			} else if(!parent1) {
+				// Create random gene
+				var constraintCount = (options.worm.joints - 1) * 2;
+				this._gene = [];
+				for(var i = 0; i < constraintCount; i++) {
+					this._gene[i] = [];
+					for(var j = 0; j < options.gene.phases / 32; j++) {
+						this._gene[i][j] = Math.random() * (1 << 16) | 0;
 
-	function createRender(i, engine) {
-		return Render.create({
-			element: sim._options.render.createRenderWrapper(i),
-			engine: engine,
-			bounds: {
-				min: { x: 0, y: 0 },
-				max: { x: sim._options.render.width / sim._options.render.scale, y: sim._options.render.height / sim._options.render.scale }
+						if(options.gene.phases >= j * 32 + 16) {
+							this._gene[i][j] |= Math.random() * (1 << 16) << 16;
+						}
+					}
+				}
+			} else { // parent1 && parent2
+				// Crossover two genes
+				this._gene = mutate(options, crossover(options, parent1._gene, parent2._gene));
+			}
+		}
+		Gene.prototype = {
+			isSet: function(constraint, phase) {
+				var i = phase >> 5; // (phase / 32)|0;
+				var j = phase & 31; // phase % 32
+				return (this._gene[constraint][i] & (1 << j)) != 0;
 			},
-			options: {
-				width: sim._options.render.width,
-				height: sim._options.render.height,
-				wireframes: false,
-				hasBounds: true
+			toJSON: function() {
+				return JSON.stringify(this._gene);
 			}
-		});
-	}
+		};
+		Gene.fromJSON = function(json) {
+			// toss psudo-gene object as the parent to copy
+			// no 'options' argument needed for the copy constructor
+			return new Gene(null, { _gene: JSON.parse(json) });
+		};
 
-	function createRandomGene() {
-		var gene = [];
-		var constraintCount = (sim._options.worm.joints - 1) * 2;
-		for(var i = 0; i < constraintCount; i++) {
-			gene[i] = [];
-			for(var j = 0; j < sim._options.gene.phases / 32; j++) {
-				gene[i][j] = Math.random() * (1 << 16) | 0;
+		function crossover(options, gene1, gene2) {
+			var gene = [];
+			var constraintCount = (options.worm.joints - 1) * 2;
+			for(var i = 0; i < constraintCount; i++) {
+				var point = (Math.random() * options.gene.phases) | 0;
+				var pointLoc = (point / 32) | 0;
+				var pointPos = point % 32;
+				var pointMask = ((1 << pointPos) - 1) | 0;
 
-				if(sim._options.gene.phases >= j * 32 + 16) {
-					gene[i][j] |= Math.random() * (1 << 16) << 16;
+				var newChrono = [];
+
+				for(var j = 0; j < pointLoc; j++) {
+					newChrono[j] = gene1[i][j];
 				}
+				newChrono[pointLoc] = (gene1[i][pointLoc] & pointMask) | (gene2[i][pointLoc] & ~pointMask);
+				for(var j = pointLoc + 1; j < options.gene.phases / 32; j++) {
+					newChrono[j] = gene2[i][j];
+				}
+
+				gene[i] = newChrono;
 			}
+			return gene;
 		}
-		return gene;
-	}
 
-	function applyMovement(constraints, gene, phase) {
-		for(var i = 0; i < constraints.length; i++) {
-			var j = (phase / 32) | 0; // phase >> 5
-			var k = phase % 32; // phase & 31
-			constraints[i].length = ((gene[i][j] & (1 << k)) != 0)? 6 : 2;
-		}
-	}
-
-	function fitness(worm) {
-		var minX = Infinity;
-		for(var i = 0; i < worm.body.length; i++) {
-			minX = Math.min(minX, worm.body[i].position.x);
-		}
-		return minX;
-	}
-
-	function wormFitnessCompare(worm1, worm2) {
-		return worm2.fitness - worm1.fitness;
-	}
-
-	function crossover(worm1, worm2) {
-		var newGene = [];
-		for(var i = 0; i < (sim._options.worm.joints - 1) * 2; i++) {
-			var point = (Math.random() * sim._options.gene.phases) | 0;
-			var pointLoc = (point / 32) | 0;
-			var pointPos = point % 32;
-			var pointMask = ((1 << pointPos) - 1) | 0;
-
-			var newChrono = [];
-			for(var j = 0; j < pointLoc; j++) {
-				newChrono[j] = worm1.gene[i][j];
-			}
-			newChrono[pointLoc] = (worm1.gene[i][pointLoc] & pointMask) | (worm2.gene[i][pointLoc] & ~pointMask);
-			for(var j = pointLoc + 1; j < sim._options.gene.phases / 32; j++) {
-				newChrono[j] = worm2.gene[i][j];
-			}
-
-			newGene[i] = newChrono;
-		}
-		return mutate(newGene, options);
-	}
-
-	function mutate(gene) {
-		for(var i = 0; i < gene.length; i++) {
-			for(var j = 0; j < /*gene[i].length*/ sim._options.gene.phases / 32; j++) {
-				for(var k = 0; k < 32 && j * 32 + k < sim._options.gene.phases; k++) {
-					if(Math.random() <= sim._options.gene.mutation) {
-						gene[i][j] ^= 1 << k
+		function mutate(options, gene) {
+			for(var i = 0; i < (options.worm.joints - 1) * 2; i++) {
+				for(var j = 0; j < /*gene[i].length*/ options.gene.phases / 32; j++) {
+					for(var k = 0; k < 32 && j * 32 + k < options.gene.phases; k++) {
+						if(Math.random() <= options.gene.mutation) {
+							gene[i][j] ^= 1 << k
+						}
 					}
 				}
 			}
-		}
-		return gene; // for chaining
-	}
-
-	function stepWorld() {
-		Events.trigger(sim, 'beforeTick');
-		for(var i = 0; i < sim._options.simulation.wormsPerGeneration; i++) {
-			applyMovement(sim._worms[i].constraints, sim._worms[i].gene, sim._phase);
-			Engine.update(sim._engines[i], sim._options.simulation.timestep);
+			return gene;
 		}
 
-		sim._period++;
-		if(sim._period >= sim._options.gene.period) {
-			sim._period = 0;
-			sim._phase++;
-			if(sim._phase >= sim._options.gene.phases) {
-				sim._phase = 0;
-			}
+		return Gene;
+	})();
+
+	var Worm = (function() {
+		function Worm(options, gene) {
+			this.length = options.worm.length;
+			this.width = options.worm.width;
+			this.joints = options.worm.joints;
+			this.stiffness = options.worm.stiffness;
+			this.friction = options.worm.friction;
+			this.gene = new Gene(options, gene); // even if !gene, the gene is randomly generated
+
+			this.fitness = 0;
+
+			this._engine = null;
+			this._composite = null;
 		}
 
-		sim._engineTime += sim._options.simulation.timestep;
-		sim._totalEngineTime += sim._options.simulation.timestep;
+		Worm.prototype = {
+			attachTo: function(engine) {
+				if(this._engine || this._composite) {
+					if(this._engine === engine) return;
 
-		Events.trigger(sim, 'afterTick tick', {
-			engineTime: sim._engineTime,
-			totalEngineTime: sim._totalEngineTime
-		});
-
-		if(sim._engineTime < sim._options.simulation.duration) {
-			sim._stepTimeout = setTimeout(stepWorld, sim._options.simulation.timestep * sim._options.simulation.speedFactor);
-		} else {
-			proceedGeneration();
-			sim._period = 0;
-			sim._phase = 0;
-			sim._engineTime = 0;
-			sim._generation++;
-			sim._stepTimeout = setTimeout(stepWorld, sim._options.simulation.timestep * sim._options.simulation.speedFactor);
-		}
-	}
-	
-	function start() {
-		if(sim._isStarted) {
-			if(sim._isPaused) {
-				resume();
-			}
-			return;
-		}
-
-		sim._period = 0;
-		sim._phase = 0;
-		sim._engineTime = 0;
-		sim._totalEngineTime = 0;
-		sim._generation = 1;
-		sim._isStarted = true;
-		sim._isPaused = false;
-
-		if(sim._options.render.enabled) {
-			for(var i = 0; i < renders.length; i++) {
-				Render.run(renders[i]);
-			}
-		}
-
-		Events.trigger(sim, 'start', {
-			options: sim._options
-		});
-		sim._stepTimeout = setTimeout(stepWorld, 0);
-	}
-
-	function pause() {
-		if(!sim._isStarted || sim._isPaused) return false;
-
-		clearTimeout(sim._stepTimeout);
-		sim._stepTimeout = 0;
-		sim._isPaused = true;
-
-		Events.trigger(sim, 'pause');
-
-		return sim._isStarted && sim._isPaused; // state can be changed in event handlers
-	}
-	function resume() {
-		if(!sim._isStarted || !sim._isPaused) return false;
-
-		sim._isPaused = false;
-		sim._stepTimeout = setTimeout(stepWorld, 0);
-
-		Events.trigger(sim, 'resume');
-
-		return sim._isStarted && !sim._isPaused;
-	}
-
-	function terminate() {
-		if(!sim._isStarted) return false;
-
-		clearTimeout(sim._stepTimeout);
-		sim._stepTimeout = 0;
-		sim._isStarted = false;
-		sim._isPaused = false;
-		
-		Events.trigger(sim, 'terminate');
-
-		return !sim._isStarted;
-	}
-
-	function proceedGeneration() {
-		var averageFitness;
-		var totalFitness = 0;
-		for(var i = 0; i < sim._options.simulation.wormsPerGeneration; i++) {
-			sim._worms[i].fitness = fitness(sim._worms[i]);
-
-			totalFitness += sim._worms[i].fitness;
-
-			//setupEngine(sim._engines[i]);
-			World.clear(sim._engines[i].world, true);
-		}
-		averageFitness = totalFitness / sim._options.simulation.wormsPerGeneration;
-
-		sim._worms.sort(wormFitnessCompare);
-
-		Events.trigger(sim, 'generationEnd', {
-			generation: sim._generation,
-			worms: sim._worms,
-			averageFitness: averageFitness
-		});
-
-		var newWorms = [];
-
-		for(var i = 0; i < sim._options.simulation.preservedWorms; i++) {
-			newWorms[i] = createWorm(sim._engines[i], sim._worms[i].gene);
-		}
-		for(var i = sim._options.simulation.preservedWorms; i < sim._options.simulation.wormsPerGeneration; i++) {
-			// Roulette wheel selection
-			var selected1 = Math.random() * totalFitness,
-				selected2 = Math.random() * totalFitness;
-			var worm1 = null,
-				worm2 = null;
-			for(var j = 0; j < sim._worms.length; j++) {
-				selected1 -= fitness(sim._worms[j]);
-				selected2 -= fitness(sim._worms[j]);
-
-				if(selected1 <= 0 && !worm1) {
-					worm1 = sim._worms[j];
+					throw "Worm is already attached to an engine; call Worm.detach() before attaching to other engine";
 				}
-				if(selected2 <= 0 && !worm2) {
-					worm2 = sim._worms[j];
+
+				// @const
+				var BEGIN_X = 50;
+
+				var divLength = this.length / this.joints;
+				var halfWidth = this.width / 2;
+				var bodyParts = [];
+				var constraints = [];
+				for(var i = 0; i < this.joints; i++) {
+					var newBody = Bodies.rectangle(BEGIN_X + divLength / 2 + divLength * i, WORLD_HEIGHT - halfWidth, divLength - 1, this.width, {
+						friction: this.friction,
+						// TODO add density option
+						render: {
+							fillStyle: (i == this.joints - 2)? "#E77" : "#FAA",
+							strokeStyle: "#F88"
+						},
+						label: "worm-body-" + i
+					});
+					bodyParts.push(newBody);
+
+					if(i > 0) {
+						constraints.push(Constraint.create({
+							bodyA: bodyParts[i - 1],
+							pointA: { x: divLength / 2 - 1, y: -halfWidth },
+							bodyB: newBody,
+							pointB: { x: -divLength / 2, y: -halfWidth },
+							stiffness: this.stiffness,
+							length: 2,
+							render: {
+								strokeStyle: "#F88"
+							},
+							label: "worm-joint-" + (i * 2)
+						}));
+						constraints.push(Constraint.create({
+							bodyA: bodyParts[i - 1],
+							pointA: { x: divLength / 2 - 1, y: halfWidth },
+							bodyB: newBody,
+							pointB: { x: -divLength / 2, y: halfWidth },
+							stiffness: this.stiffness,
+							length: 2,
+							render: {
+								strokeStyle: "#F88"
+							},
+							label: "worm-joint-" + (i * 2 + 1)
+						}));
+					}
 				}
-				if(worm1 && worm2) {
-					break;
+
+				var composite = Composite.create({
+					bodies: bodyParts,
+					constraints: constraints,
+					label: "worm"
+				});
+
+				World.add(engine.world, composite);
+
+				this._engine = engine;
+				this._composite = composite;
+
+				return this;
+			},
+			detach: function(removeBody) {
+				if(removeBody) Composite.remove(this._engine.world, this._composite);
+				this._engine = null;
+				this._composite = null;
+			},
+
+			/**
+			 * Called once per timestep, before world update.
+			 * Worms should do movement, fitness calculation(in case the final 'fitness' call is not sufficient), or
+			 * any other tasks on this function.
+			 */
+			_tick: function(phase) {
+				var constraints = this._composite.constraints;
+				for(var i = 0; i < constraints.length; i++) {
+					constraints[i].length = this.gene.isSet(i, phase)? 6 : 2;
 				}
+			},
+			/* This function should return same fitness value at any time before a call to Worm.tick(). */
+			_fitness: function() {
+				var minX = Infinity;
+				var body = this._composite.bodies;
+				for(var i = 0; i < body.length; i++) {
+					minX = Math.min(minX, body[i].position.x);
+				}
+				return minX;
 			}
-			var newGene = crossover(worm1, worm2);
-			newWorms[i] = createWorm(sim._engines[i], newGene)
-		}
+		};
 
-		sim._worms = newWorms;
-	}
+		return Worm;
+	})();
 
-	function addOnGenerationEndListener(listener) {
-		generationListeners.push(listener); // TODO rename to generation end listener
-	}
-
-	return sim;
-}
+	return {
+		Simulation: Simulation,
+		Gene: Gene,
+		Worm: Worm
+	};
+})();

@@ -51,7 +51,7 @@ $(function() {
 				}
 			};
 
-			simulation = setupSimulation(options);
+			simulation = new Wormer.Simulation(options);
 
 			(function showOptions(obj, prefix) {
 				for(var name in obj) {

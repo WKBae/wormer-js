@@ -415,6 +415,7 @@ function setupSimulation(options) {
 }
 
 $(function() {
+	var simulation;
 	var graphData;
 	var graph;
 	var bestGenes = [null];
@@ -464,8 +465,7 @@ $(function() {
 				}
 			};
 
-			var simulation = setupSimulation(options);
-			window.simulation = simulation;
+			simulation = setupSimulation(options);
 
 			(function showOptions(obj, prefix) {
 				for(var name in obj) {
@@ -610,17 +610,7 @@ $(function() {
 					$totalTime.text(((runningTime + timeOffset) / 1000).toFixed(2) + "s");
 				}, 100);
 			})();
-
-			$("#simulation-start").click(function() {
-				simulation.start();
-			});
-			$("#simulation-pause").click(function() {
-				simulation.pause();
-			});
-			$("#simulation-terminate").click(function() {
-				simulation.terminate();
-			});
-
+			
 			$("#simulation").slideDown(function() {
 				$(window).on('beforeunload', function(e) {
 					return e.returnValue = "Simulation is running. Are you sure to quit?";
@@ -629,14 +619,40 @@ $(function() {
 		});
 		return false;
 	});
+	
+	$("#simulation-start").click(function() {
+		if(simulation) simulation.start();
+	});
+	$("#simulation-pause").click(function() {
+		if(simulation) simulation.pause();
+	});
+	$("#simulation-terminate").click(function() {
+		if(simulation) simulation.terminate();
+	});
 
-	$("#export-statics").click(function() {
+	$("#export-options").click(function() {
+		if(!simulation) return;
+		
+		var json = JSON.stringify(options);
+
 		var elem = document.createElement('a');
+		elem.setAttribute('href', "data:text/json;charset=utf8," + encodeURIComponent(json));
+		elem.setAttribute('download', "options.json");
+		elem.style.display = "none";
+		document.body.appendChild(elem);
+		elem.click();
+		document.body.removeChild(elem);
+	});
+	$("#export-statics").click(function() {
+		if(!simulation) return;
+
 		var csv = "\ufeffGeneration,Maximum,Average,Median,Gene\n"; // utf-8 BOM
 		for(var i = 0; i < graphData.length; i++) {
 			csv += graphData[i][0] + "," + graphData[i][1] + "," + graphData[i][2] + "," + graphData[i][3] + ","
 					+ (bestGenes[i]? '"' + JSON.stringify(bestGenes[i]) + '"' : "") + "\n";
 		}
+
+		var elem = document.createElement('a');
 		elem.setAttribute('href', "data:text/csv;charset=utf8," + encodeURIComponent(csv));
 		elem.setAttribute('download', "graph.csv");
 		elem.style.display = "none";

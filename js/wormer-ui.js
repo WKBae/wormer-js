@@ -143,23 +143,36 @@ $(function() {
 			(function stateUpdater() {
 				var $state = $(".info-state");
 				var $panel = $("#simulation-panel");
+				var $start = $("#simulation-start");
+				var $stop = $("#simulation-pause");
 
 				$state.text("Terminated");
+				$start.prop('disabled', false);
+				$stop.prop('disabled', true);
 
 				simulation.on('start resume', function(e) {
 					$panel.removeClass("panel-primary panel-success panel-info panel-warning panel-danger")
 						.addClass("panel-info");
 					$state.text("Running");
+
+					$start.prop('disabled', true);
+					$stop.prop('disabled', false);
 				});
 				simulation.on('pause', function(e) {
 					$panel.removeClass("panel-primary panel-success panel-info panel-warning panel-danger")
 						.addClass("panel-warning");
 					$state.text("Paused");
+
+					$start.prop('disabled', false);
+					$stop.prop('disabled', true);
 				});
 				simulation.on('terminate', function(e) {
 					$panel.removeClass("panel-primary panel-success panel-info panel-warning panel-danger")
 						.addClass("panel-danger");
 					$state.text("Terminated");
+
+					$start.prop('disabled', false);
+					$stop.prop('disabled', true);
 				});
 			})();
 
@@ -189,12 +202,15 @@ $(function() {
 
 				var $simulationTime = $(".info-time-simulation");
 				var $totalTime = $(".info-time-total");
-				setInterval(function() {
+
+				(function updateTimeLabels() {
 					$simulationTime.text((totalEngineTime / 1000).toFixed(2) + "s");
 
 					var runningTime = timeStarted > 0? Date.now() - timeStarted : 0;
 					$totalTime.text(((runningTime + timeOffset) / 1000).toFixed(2) + "s");
-				}, 100);
+
+					requestAnimationFrame(updateTimeLabels);
+				})();
 			})();
 			
 			$("#simulation").slideDown(function() {

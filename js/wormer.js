@@ -14,50 +14,42 @@ var Wormer = (function() {
 		Composite = Matter.Composite;
 
 	// @const
-	var WORLD_WIDTH = 2000,
+	var WORLD_WIDTH = 4000,
 		WORLD_HEIGHT = 300;
-
-	var defaults = {
-		simulation: {
-			wormsPerGeneration: 30,
-			preservedWorms: 4,
-			timestep: 1000 / 60,
-			speedFactor: 0,
-			duration: 15000
-		},
-		worm: {
-			width: 10,
-			length: 100,
-			joints: 4,
-			stiffness: 0.4,
-			friction: 0.5
-		},
-		gene: {
-			phases: 128,
-			period: 5, // timesteps of world passed between each phase
-			mutation: 0.01
-		},
-		render: { // TODO move render out, independent of simulation
-			enabled: true,
-			width: 1000,
-			height: 150,
-			scale: 0.5,
-			createRenderWrapper: function(i) {
-				return $('<div class="render col-lg-6 col-xs-12" id="render-'+i+'"></div>').appendTo("#renders")[0];
-			}
-		}
-	};
 
 	var Simulation = (function() {
 		function Simulation(options) {
+			var defaults = {
+				simulation: {
+					wormsPerGeneration: 30,
+					preservedWorms: 4,
+					timestep: 1000 / 60,
+					speedFactor: 0,
+					duration: 15000
+				},
+				worm: {
+					width: 10,
+					length: 100,
+					joints: 4,
+					stiffness: 0.4,
+					friction: 0.5
+				},
+				gene: {
+					phases: 128,
+					period: 5, // timesteps of world passed between each phase
+					mutation: 0.01
+				}
+			};
+
 			var self = this;
 
-			Object.defineProperty(self, 'options', {
+			/*Object.defineProperty(self, 'options', {
 				value: deepFreeze(Common.extend(defaults, options)),
 				configurable: false,
 				enumerable: true,
 				writable: false
-			});
+			});*/
+			self.options = deepFreeze(Common.extend(defaults, options));
 
 			self.engines = [];
 			self.worms = [];
@@ -69,8 +61,8 @@ var Wormer = (function() {
 			self.generationTime = 0;
 			self.totalEngineTime = 0;
 
-			self._isStarted = false;
-			self._isPaused = false;
+			self.isStarted = false;
+			self.isPaused = false;
 			self._stepTimeout = 0;
 
 			self._stepWorld = stepWorld;
@@ -81,7 +73,9 @@ var Wormer = (function() {
 			}
 
 			function createEngine() {
-				return Engine.create(); // any options?
+				return Engine.create({
+					//constraintIterations: 3 // may have some side-effects on old simulation results
+				});
 			}
 
 			function setupEngine(engine) {
@@ -113,23 +107,6 @@ var Wormer = (function() {
 				return engine;
 			}
 
-			function createRender(i, engine) {
-				return Render.create({
-					element: self.options.render.createRenderWrapper(i),
-					engine: engine,
-					bounds: {
-						min: { x: 0, y: 0 },
-						max: { x: self.options.render.width / self.options.render.scale, y: self.options.render.height / self.options.render.scale }
-					},
-					options: {
-						width: self.options.render.width,
-						height: self.options.render.height,
-						wireframes: false,
-						hasBounds: true
-					}
-				});
-			}
-
 			function wormFitnessCompare(worm1, worm2) {
 				return worm2.fitness - worm1.fitness;
 			}
@@ -159,14 +136,22 @@ var Wormer = (function() {
 				});
 
 				if(self.generationTime < self.options.simulation.duration) {
-					self._stepTimeout = setTimeout(stepWorld, self.options.simulation.timestep * self.options.simulation.speedFactor);
+					if(self.isStarted && !self.isPaused) { // Simulation can be paused or terminated in a event handler
+						self._stepTimeout = setTimeout(stepWorld, self.options.simulation.timestep * self.options.simulation.speedFactor);
+					} else {
+						self._stepTimeout = 0;
+					}
 				} else {
 					proceedGeneration();
 					self.period = 0;
 					self.phase = 0;
 					self.generationTime = 0;
 					self.generation++;
-					self._stepTimeout = setTimeout(stepWorld, self.options.simulation.timestep * self.options.simulation.speedFactor);
+					if(self.isStarted && !self.isPaused) {
+						self._stepTimeout = setTimeout(stepWorld, self.options.simulation.timestep * self.options.simulation.speedFactor);
+					} else {
+						self._stepTimeout = 0;
+					}
 				}
 			}
 
@@ -186,7 +171,7 @@ var Wormer = (function() {
 
 				self.worms.sort(wormFitnessCompare);
 
-				Events.trigger(self, 'generationEnd', {
+				Events.trigger(self, 'generationEnd', { // TODO event object not needed? these data are now open in Simulation obj
 					generation: self.generation,
 					worms: self.worms,
 					averageFitness: averageFitness
@@ -227,8 +212,8 @@ var Wormer = (function() {
 
 		Simulation.prototype = {
 			start: function() {
-				if(this._isStarted) {
-					if(this._isPaused) {
+				if(this.isStarted) {
+					if(this.isPaused) {
 						this.resume();
 					}
 					return;
@@ -241,8 +226,8 @@ var Wormer = (function() {
 				this.generationTime = 0;
 				this.totalEngineTime = 0;
 
-				this._isStarted = true;
-				this._isPaused = false;
+				this.isStarted = true;
+				this.isPaused = false;
 
 				Events.trigger(this, 'start', {
 					options: this.options
@@ -250,44 +235,46 @@ var Wormer = (function() {
 				this._stepTimeout = setTimeout(this._stepWorld, 0);
 			},
 			pause: function() {
-				if(!this._isStarted || this._isPaused) return false;
+				if(!this.isStarted || this.isPaused) return false;
 
 				clearTimeout(this._stepTimeout);
 				this._stepTimeout = 0;
-				this._isPaused = true;
+				this.isPaused = true;
 
 				Events.trigger(this, 'pause');
 
-				return this._isStarted && this._isPaused; // state can be changed in event handlers
+				return this.isStarted && this.isPaused; // state can be changed in event handlers
 			},
 			resume: function() {
-				if(!this._isStarted || !this._isPaused) return false;
+				if(!this.isStarted || !this.isPaused) return false;
 
-				this._isPaused = false;
+				this.isPaused = false;
 				this._stepTimeout = setTimeout(this._stepWorld, 0);
 
 				Events.trigger(this, 'resume');
 
-				return this._isStarted && !this._isPaused;
+				return this.isStarted && !this.isPaused;
 			},
 			terminate: function() {
-				if(!this._isStarted) return false;
+				if(!this.isStarted) return false;
 
 				clearTimeout(this._stepTimeout);
 				this._stepTimeout = 0;
-				this._isStarted = false;
-				this._isPaused = false;
+				this.isStarted = false;
+				this.isPaused = false;
 				
 				Events.trigger(this, 'terminate');
 
-				return !this._isStarted;
+				return !this.isStarted;
 			},
 
 			on: function(eventNames, callback) {
-				return Events.on(this, eventNames, callback);
+				Events.on(this, eventNames, callback);
+				return this;
 			},
 			off: function(eventNames, callback) {
 				Events.off(this, eventNames, callback);
+				return this;
 			}
 		};
 
@@ -310,6 +297,7 @@ var Wormer = (function() {
 
 		return Simulation;
 	})();
+
 
 	var Gene = (function() {
 		/**
@@ -401,6 +389,7 @@ var Wormer = (function() {
 		return Gene;
 	})();
 
+
 	var Worm = (function() {
 		function Worm(options, gene) {
 			this.length = options.worm.length;
@@ -488,6 +477,7 @@ var Wormer = (function() {
 				if(removeBody) Composite.remove(this._engine.world, this._composite);
 				this._engine = null;
 				this._composite = null;
+				return this;
 			},
 
 			/**
@@ -514,6 +504,7 @@ var Wormer = (function() {
 
 		return Worm;
 	})();
+
 
 	return {
 		Simulation: Simulation,

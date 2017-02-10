@@ -24,7 +24,7 @@
 				padding: 5px;
 				border-radius: 3px;
 				border: 1px solid #CCC;
-				overflow: hidden;
+				overflow-x: scroll;
 			}
 			.dygraph-legend {
 				background: rgba(240, 240, 240, 0.5);
@@ -40,6 +40,16 @@
 			}
 			.options-wrapper h4 {
 				margin-top: 0;
+			}
+			#rerun-progress {
+				width: 0;
+				min-width: 4em;
+				transition: width .1s ease;
+				-webkit-transition: width .1s ease;
+				-o-transition: width .1s ease;
+			}
+			#rerun-render canvas {
+				cursor: pointer;
 			}
 		</style>
 		<script>
@@ -57,7 +67,7 @@
 							<h3 class="panel-title">Settings</h3>
 						</div>
 						<div class="panel-body">
-							<form>
+							<div class="panel-group">
 								<div class="panel panel-default">
 									<div class="panel-heading">
 										<h3 class="panel-title">Simulation options</h3>
@@ -145,17 +155,14 @@
 										</div>
 									</div>
 								</div>
-								<div class="checkbox">
-									<label><input type="checkbox" id="doRender" checked> Render simulation</label>
-								</div>
+							</div>
 
-								<button type="submit" class="btn btn-primary" id="start">
-									<span class="glyphicon glyphicon-play" aria-hidden="true"></span> Start
-								</button>
-								<button type="reset" class="btn btn-default">
-									<span class="glyphicon glyphicon-repeat" aria-hidden="true"></span> Reset
-								</button>
-							</form>
+							<button type="submit" class="btn btn-primary" id="start">
+								<span class="glyphicon glyphicon-play" aria-hidden="true"></span> Start
+							</button>
+							<button type="reset" class="btn btn-default">
+								<span class="glyphicon glyphicon-repeat" aria-hidden="true"></span> Reset
+							</button>
 						</div>
 					</div>
 				</div>
@@ -203,7 +210,7 @@
 
 							<ul class="nav nav-tabs">
 								<li class="active"><a href="#tab-status" data-toggle="tab">Status</a></li>
-								<li><a href="#tab-history" data-toggle="tab">History</a></li>
+								<li><a href="#tab-statics" data-toggle="tab">Statics</a></li>
 							</ul>
 
 							<div class="tab-content">
@@ -278,10 +285,25 @@
 									</div>
 									<div class="row" id="renders"></div>
 								</div>
-								<div class="tab-pane" id="tab-history">
+								<div class="tab-pane" id="tab-statics">
 									<div class="row">
 										<div class="col-sm-6 col-xs-12">
+											<div class="page-header">
+												<h3>Fitness history</h3>
+											</div>
 											<div id="historyChart" style="width:100%"></div>
+										</div>
+										<div class="col-sm-6 col-xs-12" id="rerun">
+											<div class="page-header">
+												<h3>Best gene <small>Generation <span id="rerun-gen"></span></small></h3>
+											</div>
+											<div id="rerun-render" class="row">
+												<div class="col-xs-12">
+													<div class="progress">
+														<div class="progress-bar progress-bar-striped progress-bar-warning" role="progressbar" id="rerun-progress">0.0s</div>
+													</div>
+												</div>
+											</div>
 										</div>
 										<div class="col-sm-6 col-xs-12">
 											<div class="page-header">
@@ -297,12 +319,6 @@
 												<dt>Standard deviation</dt>
 												<dd class="info-fitness-stdev"></dd>
 											</dl>
-										</div>
-										<div class="col-xs-12" id="rerun" style="display:none">
-											<div class="page-header">
-												<h3>Simulation</h3>
-											</div>
-											<div id="rerun-render"></div>
 										</div>
 									</div>
 								</div>
@@ -337,6 +353,7 @@
 		<script src="js/bootstrap.min.js"></script>
 		<script src="js/dygraph.min.js"></script>
 		<script src="js/wormer.js"></script>
+		<script src="js/lz-string.min.js"></script>
 		<script src="js/wormer-ui.js"></script>
 	</body>
 </html>

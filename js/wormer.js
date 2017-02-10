@@ -275,8 +275,38 @@ var Wormer = (function() {
 			off: function(eventNames, callback) {
 				Events.off(this, eventNames, callback);
 				return this;
+			},
+
+			toJSON: function() {
+				var clone = {};
+				var blacklist = ['engines', 'isStarted', 'isPaused', '_stepTimeout', '_stepWorld', 'events'];
+				for(var key in this) {
+					if(this.hasOwnProperty(key) && blacklist.indexOf(key) === -1) {
+						clone[key] = this[key];
+					}
+				}
+				return JSON.stringify(clone);
 			}
 		};
+		Simulation.fromJSON = function(json) {
+			if(typeof json === 'string') {
+				json = JSON.parse(json);
+			}
+			var sim = new Simulation(json.options);
+
+			for(var i = 0; i < json.worms.length; i++) {
+				sim.worms[i] = Worm.fromJSON(json.worms[i]).attachTo(sim.engines[i]);
+			}
+
+			var props = ['generation', 'phase', 'period', 'generationTime', 'totalEngineTime'];
+			for(var i in props) {
+				sim[props[i]] = json[props[i]];
+			}
+
+			sim.isStarted = true;
+			sim.isPaused = true;
+			return sim;
+		}
 
 		function deepFreeze (o) {
 			Object.freeze(o);
@@ -344,9 +374,13 @@ var Wormer = (function() {
 			}
 		};
 		Gene.fromJSON = function(json) {
+			if(typeof json === 'string') {
+				json = JSON.parse(json);
+			}
+
 			// toss psudo-gene object as the parent to copy
 			// no 'options' argument needed for the copy constructor
-			return new Gene(null, { _gene: JSON.parse(json) });
+			return new Gene(null, { _gene: json });
 		};
 
 		function crossover(options, gene1, gene2) {
@@ -480,6 +514,17 @@ var Wormer = (function() {
 				return this;
 			},
 
+			toJSON: function() {
+				var clone = {};
+				var blacklist = ['_engine', '_composite', 'events'];
+				for(var key in this) {
+					if(this.hasOwnProperty(key) && blacklist.indexOf(key) === -1) {
+						clone[key] = this[key];
+					}
+				}
+				return JSON.stringify(clone);
+			},
+
 			/**
 			 * Called once per timestep, before world update.
 			 * Worms should do movement, fitness calculation(in case the final 'fitness' call is not sufficient), or
@@ -501,6 +546,17 @@ var Wormer = (function() {
 				return minX;
 			}
 		};
+
+		Worm.fromJSON = function(json) {
+			if(typeof json === 'string') {
+				json = JSON.parse(json);
+			}
+
+			var worm = new Worm({
+				worm: json
+			}, Gene.fromJSON(json.gene));
+			return worm;
+		}
 
 		return Worm;
 	})();

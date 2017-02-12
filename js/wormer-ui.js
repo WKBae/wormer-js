@@ -220,16 +220,14 @@ $(function() {
 
 				$start.prop('disabled', true);
 				$stop.prop('disabled', false);
-			});
-			simulation.on('pause', function(e) {
+			}).on('pause', function(e) {
 				$panel.removeClass("panel-primary panel-success panel-info panel-warning panel-danger")
 					.addClass("panel-warning");
 				$state.text("Paused");
 
 				$start.prop('disabled', false);
 				$stop.prop('disabled', true);
-			});
-			simulation.on('terminate', function(e) {
+			}).on('terminate', function(e) {
 				$panel.removeClass("panel-primary panel-success panel-info panel-warning panel-danger")
 					.addClass("panel-danger");
 				$state.text("Terminated");
@@ -249,31 +247,30 @@ $(function() {
 			simulation.on('start', function(e) {
 				timeOffset = 0;
 				timeStarted = Date.now();
-			});
-			simulation.on('resume', function(e) {
+			}).on('resume', function(e) {
 				timeStarted = Date.now();
-			});
-			simulation.on('pause terminate', function(e) {
+			}).on('pause terminate', function(e) {
 				timeOffset += Date.now() - timeStarted;
 				timeStarted = 0;
-			});
-
-			simulation.on('tick', function(e) {
+			}).on('tick', function(e) {
 				engineTime = e.engineTime;
 				totalEngineTime = e.totalEngineTime;
 			});
 
-			var $simulationTime = $(".info-time-simulation");
-			var $totalTime = $(".info-time-total");
+			var simulationTime = $(".info-time-simulation")[0];
+			var totalTime = $(".info-time-total")[0];
 
 			(function updateTimeLabels() {
-				$simulationTime.text((totalEngineTime / 1000).toFixed(2) + "s");
+				//$simulationTime.text((totalEngineTime / 1000).toFixed(2) + "s");
+				simulationTime.innerHTML = (totalEngineTime / 1000).toFixed(2) + "s";
 
 				var runningTime = timeStarted > 0? Date.now() - timeStarted : 0;
-				$totalTime.text(((runningTime + timeOffset) / 1000).toFixed(2) + "s");
+				//$totalTime.text(((runningTime + timeOffset) / 1000).toFixed(2) + "s");
+				totalTime.innerHTML = ((runningTime + timeOffset) / 1000).toFixed(2) + "s";
 
 				requestAnimationFrame(updateTimeLabels);
 			})();
+			//setInterval(updateTimeLabels, 100);
 		})();
 	}
 

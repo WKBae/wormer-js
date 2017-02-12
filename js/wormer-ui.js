@@ -253,8 +253,8 @@ $(function() {
 				timeOffset += Date.now() - timeStarted;
 				timeStarted = 0;
 			}).on('tick', function(e) {
-				engineTime = e.engineTime;
-				totalEngineTime = e.totalEngineTime;
+				engineTime = this.generationTime;
+				totalEngineTime = this.totalEngineTime;
 			});
 
 			var simulationTime = $(".info-time-simulation")[0];

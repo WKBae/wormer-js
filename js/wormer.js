@@ -41,35 +41,35 @@ var Wormer = (function() {
 				}
 			};
 
-			var self = this;
-
-			/*Object.defineProperty(self, 'options', {
+			/*Object.defineProperty(this, 'options', {
 				value: deepFreeze(Common.extend(defaults, options)),
 				configurable: false,
 				enumerable: true,
 				writable: false
 			});*/
-			self.options = deepFreeze(Common.extend(defaults, options));
+			this.options = deepFreeze(Common.extend(defaults, options));
 
-			self.engines = [];
-			self.worms = [];
+			this.engines = [];
+			this.worms = [];
 
-			self.generation = 0;
-			self.phase = 0;
-			self.period = 0;
+			this.generation = 0;
+			this.phase = 0;
+			this.period = 0;
 
-			self.generationTime = 0;
-			self.totalEngineTime = 0;
+			this.generationTime = 0;
+			this.totalEngineTime = 0;
 
-			self.isStarted = false;
-			self.isPaused = false;
-			self._stepTimeout = 0;
+			this.isStarted = false;
+			this.isPaused = false;
+			this._stepTimeout = 0;
 
-			self._stepWorld = stepWorld;
+			this._stepWorld = stepWorld;
 
-			for(var i = 0; i < self.options.simulation.wormsPerGeneration; i++) {
-				self.engines[i] = setupEngine(createEngine());
-				self.worms[i] = new Worm(options).attachTo(self.engines[i]);
+			var that = this;
+
+			for(var i = 0; i < this.options.simulation.wormsPerGeneration; i++) {
+				this.engines[i] = setupEngine(createEngine());
+				this.worms[i] = new Worm(options).attachTo(this.engines[i]);
 			}
 
 			function createEngine() {
@@ -102,55 +102,56 @@ var Wormer = (function() {
 
 				World.add(engine.world, ground);
 
-				Events.trigger(self, 'setupEngine', {engine: engine});
+				Events.trigger(that, 'setupEngine', {engine: engine});
 
 				return engine;
 			}
 
-			function wormFitnessCompare(worm1, worm2) {
-				return worm2.fitness - worm1.fitness;
-			}
-
+			// cached option values for performance
+			var timestep = this.options.simulation.timestep;
+			var wormLength = this.options.simulation.wormsPerGeneration;
+			var preservedLength = this.options.simulation.preservedWorms;
+			var maxPeriod = this.options.gene.period;
+			var maxPhase = this.options.gene.phases;
+			var finishTime = this.options.simulation.duration;
+			var speedFactor = this.options.simulation.speedFactor; // TODO move speedFactor out of option to make it configurable
 			function stepWorld() {
-				Events.trigger(self, 'beforeTick');
-				for(var i = 0; i < self.options.simulation.wormsPerGeneration; i++) {
-					self.worms[i]._tick(self.generationTime, self.phase);
-					Engine.update(self.engines[i], self.options.simulation.timestep);
+				Events.trigger(that, 'beforeTick');
+				for(var i = 0; i < wormLength; i++) {
+					that.worms[i]._tick(that.generationTime, that.phase);
+					Engine.update(that.engines[i], timestep);
 				}
 
-				self.period++;
-				if(self.period >= self.options.gene.period) {
-					self.period = 0;
-					self.phase++;
-					if(self.phase >= self.options.gene.phases) {
-						self.phase = 0;
+				that.period++;
+				if(that.period >= maxPeriod) {
+					that.period = 0;
+					that.phase++;
+					if(that.phase >= maxPhase) {
+						that.phase = 0;
 					}
 				}
 
-				self.generationTime += self.options.simulation.timestep;
-				self.totalEngineTime += self.options.simulation.timestep;
+				that.generationTime += timestep;
+				that.totalEngineTime += timestep;
 
-				Events.trigger(self, 'afterTick tick', {
-					generationTime: self.generationTime,
-					totalEngineTime: self.totalEngineTime
-				});
+				Events.trigger(that, 'afterTick tick');
 
-				if(self.generationTime < self.options.simulation.duration) {
-					if(self.isStarted && !self.isPaused) { // Simulation can be paused or terminated in a event handler
-						self._stepTimeout = setTimeout(stepWorld, self.options.simulation.timestep * self.options.simulation.speedFactor);
+				if(that.generationTime < finishTime) {
+					if(that.isStarted && !that.isPaused) { // Simulation can be paused or terminated in a event handler
+						that._stepTimeout = setTimeout(stepWorld, timestep * speedFactor);
 					} else {
-						self._stepTimeout = 0;
+						that._stepTimeout = 0;
 					}
 				} else {
 					proceedGeneration();
-					self.period = 0;
-					self.phase = 0;
-					self.generationTime = 0;
-					self.generation++;
-					if(self.isStarted && !self.isPaused) {
-						self._stepTimeout = setTimeout(stepWorld, self.options.simulation.timestep * self.options.simulation.speedFactor);
+					that.period = 0;
+					that.phase = 0;
+					that.generationTime = 0;
+					that.generation++;
+					if(that.isStarted && !that.isPaused) {
+						that._stepTimeout = setTimeout(stepWorld, timestep * speedFactor);
 					} else {
-						self._stepTimeout = 0;
+						that._stepTimeout = 0;
 					}
 				}
 			}
@@ -158,55 +159,61 @@ var Wormer = (function() {
 			function proceedGeneration() {
 				var averageFitness;
 				var totalFitness = 0;
-				for(var i = 0; i < self.options.simulation.wormsPerGeneration; i++) {
-					self.worms[i].fitness = self.worms[i]._fitness();
+				for(var i = 0; i < wormLength; i++) {
+					that.worms[i].fitness = that.worms[i]._fitness();
 
-					totalFitness += self.worms[i].fitness;
+					totalFitness += that.worms[i].fitness;
 
-					//setupEngine(self._engines[i]);
-					//World.clear(self.engines[i].world, true);
-					self.worms[i].detach(true);
+					//setupEngine(that._engines[i]);
+					//World.clear(that.engines[i].world, true);
+					that.worms[i].detach(true);
 				}
-				averageFitness = totalFitness / self.options.simulation.wormsPerGeneration;
+				averageFitness = totalFitness / wormLength;
 
-				self.worms.sort(wormFitnessCompare);
+				that.worms.sort(wormFitnessCompare);
 
-				Events.trigger(self, 'generationEnd', { // TODO event object not needed? these data are now open in Simulation obj
-					generation: self.generation,
-					worms: self.worms,
+				Events.trigger(that, 'generationEnd', { // TODO event object not needed? these data are now open in Simulation obj
+					generation: that.generation,
+					worms: that.worms,
 					averageFitness: averageFitness
 				});
 
 				var newWorms = [];
 
-				for(var i = 0; i < self.options.simulation.preservedWorms; i++) {
-					newWorms[i] = new Worm(options, self.worms[i].gene).attachTo(self.engines[i]);
+				for(var i = 0; i < preservedLength; i++) {
+					newWorms[i] = new Worm(options, that.worms[i].gene).attachTo(that.engines[i]);
 				}
-				for(var i = self.options.simulation.preservedWorms; i < self.options.simulation.wormsPerGeneration; i++) {
+				for(var i = preservedLength; i < wormLength; i++) {
 					// Roulette wheel selection
 					var selected1 = Math.random() * totalFitness,
 						selected2 = Math.random() * totalFitness;
 					var worm1 = null,
 						worm2 = null;
-					for(var j = 0; j < self.worms.length; j++) {
-						selected1 -= self.worms[j].fitness;
-						selected2 -= self.worms[j].fitness;
+					for(var j = 0; j < that.worms.length; j++) {
+						selected1 -= that.worms[j].fitness;
+						selected2 -= that.worms[j].fitness;
 
 						if(selected1 <= 0 && !worm1) {
-							worm1 = self.worms[j];
+							worm1 = that.worms[j];
 						}
 						if(selected2 <= 0 && !worm2) {
-							worm2 = self.worms[j];
+							worm2 = that.worms[j];
 						}
 						if(worm1 && worm2) {
 							break;
 						}
 					}
 					var newGene = new Gene(options, worm1.gene, worm2.gene);
-					newWorms[i] = new Worm(options, newGene).attachTo(self.engines[i]);
+					newWorms[i] = new Worm(options, newGene).attachTo(that.engines[i]);
 				}
 
-				self.worms = newWorms;
+				that.worms = newWorms;
+
+				Events.trigger(that, 'generationStart');
+			}
+
+			function wormFitnessCompare(worm1, worm2) {
+				return worm2.fitness - worm1.fitness;
 			}
 		}
 
@@ -232,6 +239,7 @@ var Wormer = (function() {
 				Events.trigger(this, 'start', {
 					options: this.options
 				});
+				Events.trigger(this, 'generationStart');
 				this._stepTimeout = setTimeout(this._stepWorld, 0);
 			},
 			pause: function() {
@@ -299,7 +307,7 @@ var Wormer = (function() {
 			}
 
 			var props = ['generation', 'phase', 'period', 'generationTime', 'totalEngineTime'];
-			for(var i in props) {
+			for(var i = 0; i < props.length; i++) {
 				sim[props[i]] = json[props[i]];
 			}
 
@@ -386,8 +394,9 @@ var Wormer = (function() {
 		function crossover(options, gene1, gene2) {
 			var gene = [];
 			var constraintCount = (options.worm.joints - 1) * 2;
+			var phases = options.gene.phases;
 			for(var i = 0; i < constraintCount; i++) {
-				var point = (Math.random() * options.gene.phases) | 0;
+				var point = (Math.random() * phases) | 0;
 				var pointLoc = (point / 32) | 0;
 				var pointPos = point % 32;
 				var pointMask = ((1 << pointPos) - 1) | 0;
@@ -398,7 +407,7 @@ var Wormer = (function() {
 					newChrono[j] = gene1[i][j];
 				}
 				newChrono[pointLoc] = (gene1[i][pointLoc] & pointMask) | (gene2[i][pointLoc] & ~pointMask);
-				for(var j = pointLoc + 1; j < options.gene.phases / 32; j++) {
+				for(var j = pointLoc + 1; j < phases / 32; j++) {
 					newChrono[j] = gene2[i][j];
 				}
 
@@ -408,10 +417,13 @@ var Wormer = (function() {
 		}
 
 		function mutate(options, gene) {
-			for(var i = 0; i < (options.worm.joints - 1) * 2; i++) {
-				for(var j = 0; j < /*gene[i].length*/ options.gene.phases / 32; j++) {
-					for(var k = 0; k < 32 && j * 32 + k < options.gene.phases; k++) {
-						if(Math.random() <= options.gene.mutation) {
+			var constraintCount = (options.worm.joints - 1) * 2;
+			var phases = options.gene.phases;
+			var mutation = options.gene.mutation
+			for(var i = 0; i < constraintCount; i++) {
+				for(var j = 0; j < /*gene[i].length*/ phases / 32; j++) {
+					for(var k = 0; k < 32 && j * 32 + k < phases; k++) {
+						if(Math.random() <= mutation) {
 							gene[i][j] ^= 1 << k
 						}
 					}

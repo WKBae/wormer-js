@@ -6,7 +6,6 @@ var Wormer = (function() {
 	var Common = Matter.Common,
 		Events = Matter.Events,
 		Engine = Matter.Engine,
-		Render = Matter.Render,
 		World = Matter.World,
 		Body = Matter.Body,
 		Bodies = Matter.Bodies,
@@ -17,7 +16,9 @@ var Wormer = (function() {
 	var WORLD_WIDTH = 4000,
 		WORLD_HEIGHT = 300;
 
-	var Simulation = (function() {
+	var Simulation, Worm, Gene;
+
+	Simulation = (function() {
 		function Simulation(options) {
 			var defaults = {
 				simulation: {
@@ -77,6 +78,8 @@ var Wormer = (function() {
 				this.engines[i] = setupEngine(createEngine());
 				this.worms[i] = new Worm(options).attachTo(this.engines[i]);
 			}
+
+			Events.trigger(this, 'ready');
 
 			function createEngine() {
 				var iters = that.options.simulation.iterations;
@@ -279,7 +282,7 @@ var Wormer = (function() {
 				this._stepTimeout = 0;
 				this.isStarted = false;
 				this.isPaused = false;
-				
+
 				Events.trigger(this, 'terminate');
 
 				return !this.isStarted;
@@ -296,7 +299,13 @@ var Wormer = (function() {
 
 			toJSON: function() {
 				var clone = {};
-				var blacklist = ['engines', 'isStarted', 'isPaused', '_stepTimeout', '_stepWorld', 'events'];
+				var blacklist = [
+					'engines',
+					'phase', 'period', 'generationTime',
+					'isStarted', 'isPaused',
+					'_stepTimeout', '_stepWorld',
+					'events'
+				];
 				for(var key in this) {
 					if(this.hasOwnProperty(key) && blacklist.indexOf(key) === -1) {
 						clone[key] = this[key];
@@ -315,7 +324,7 @@ var Wormer = (function() {
 				sim.worms[i] = Worm.fromJSON(json.worms[i]).attachTo(sim.engines[i]);
 			}
 
-			var props = ['generation', 'phase', 'period', 'generationTime', 'totalEngineTime'];
+			var props = ['generation', 'totalEngineTime'];
 			for(var i = 0; i < props.length; i++) {
 				sim[props[i]] = json[props[i]];
 			}
@@ -323,7 +332,7 @@ var Wormer = (function() {
 			sim.isStarted = true;
 			sim.isPaused = true;
 			return sim;
-		}
+		};
 
 		function deepFreeze (o) {
 			Object.freeze(o);
@@ -346,7 +355,7 @@ var Wormer = (function() {
 	})();
 
 
-	var Gene = (function() {
+	Gene = (function() {
 		/**
 		 * 2D Array & 32-bit integer implementation of gene
 		 * may switch to String-based, TypedArray-based, ... if the prototypes are implemented correctly.
@@ -445,7 +454,7 @@ var Wormer = (function() {
 	})();
 
 
-	var Worm = (function() {
+	Worm = (function() {
 		function Worm(options, gene) {
 			this.length = options.worm.length;
 			this.width = options.worm.width;
@@ -578,7 +587,7 @@ var Wormer = (function() {
 				worm: json
 			}, Gene.fromJSON(json.gene));
 			return worm;
-		}
+		};
 
 		return Worm;
 	})();

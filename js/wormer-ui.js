@@ -53,15 +53,6 @@ $(function() {
 		return render;
 	}
 
-	function loadSimulation(file) {
-		var reader = new FileReader();
-		reader.onload = function(e) {
-			var contents = e.target.result;
-			debugger;
-		};
-		reader.readAsArrayBuffer(file);
-	}
-
 	function setupForSimulation(simulation) {
 		var options = simulation.options;
 
@@ -276,26 +267,7 @@ $(function() {
 
 	$("#start").click(function() {
 		$("#options").slideUp(function() {
-			var options = {
-				simulation: {
-					wormsPerGeneration: parseInt($("#worms-per-gen").val(), 10),
-					preservedWorms: parseInt($("#preserved-worms").val(), 10),
-					speedFactor: parseFloat($("#speed").val()),
-					duration: parseInt($("#duration").val(), 10)
-				},
-				worm: {
-					width: parseInt($("#width").val(), 10),
-					length: parseInt($("#length").val(), 10),
-					joints: parseInt($("#joints").val(), 10),
-					stiffness: parseFloat($("#stiffness").val()),
-					friction: parseFloat($("#friction").val())
-				},
-				gene: {
-					phases: parseInt($("#phases").val(), 10),
-					period: parseInt($("#period").val(), 10), // timesteps of world passed between each phase
-					mutation: parseFloat($("#mutation").val())
-				}
-			};
+			var options = readOptions();
 
 			simulation = new Wormer.Simulation(options);
 
@@ -309,20 +281,153 @@ $(function() {
 		});
 		return false;
 	});
-	
-	$("#simulation-start").click(function() {
-		if(simulation) simulation.start();
-	});
-	$("#simulation-pause").click(function() {
-		if(simulation) simulation.pause();
-	});
-	$("#simulation-terminate").click(function() {
-		if(simulation) simulation.terminate();
-	});
 
-	$("#export-simulation").click(function() {
-		if(!simulation) return;
+	var elements = {
+		simulation: {
+			wormsPerGeneration: "#worms-per-gen",
+			preservedWorms: "#preserved-worms",
+			speedFactor: "#speed",
+			duration: "#duration"
+		},
+		worm: {
+			width: "#width",
+			length: "#length",
+			density: "#density",
+			joints: "#joints",
+			stiffness: "#stiffness",
+			friction: "#friction"
+		},
+		gene: {
+			phases: "#phases",
+			period: "#period", // timesteps of world passed between each phase
+			mutation: "#mutation"
+		}
+	};
 
+	function applyOptions(options) {
+		var applied = 0;
+
+		(function iterate(options, elements) {
+			if(!options || !elements) return;
+
+			for(var key in options) {
+				if(options.hasOwnProperty(key) && elements.hasOwnProperty(key)) {
+					if(typeof elements[key] === 'string') {
+						$(elements[key]).val(options[key]);
+						applied++;
+					} else {
+						iterate(options[key], elements[key]);
+					}
+				}
+			}
+		})(options, elements);
+		return applied;
+	}
+
+	function readOptions(options) {
+		var result = {};
+
+		(function iterate(result, elements) {
+			if(!result || !elements) return;
+			
+			for(var key in elements) {
+				if(elements.hasOwnProperty(key)) {
+					if(typeof elements[key] === 'string') {
+						result[key] = parseFloat($(elements[key]).val());
+					} else {
+						result[key] = {};
+						iterate(result[key], elements[key]);
+					}
+				}
+			}
+		})(result, elements);
+		return result;
+	}
+
+	function loadOptions(file) {
+		var reader = new FileReader();
+		reader.onload = function(e) {
+			var content = e.target.result;
+			var options;
+			var $alert;
+			try {
+				options = JSON.parse(content);
+
+				if(applyOptions(options) > 0) {
+					$alert = $(".options-load-success");
+				} else {
+					$alert = $(".options-load-warning");
+				}
+			} catch(e) {
+				$alert = $(".options-load-failed");
+			}
+			$alert.first().clone()
+				.insertAfter($(".options-load-alert").last())
+				.css("display", "")
+				.addClass("in");
+		}
+		reader.readAsText(file);
+	}
+
+	function loadSimulation(file, asText) {
+		var reader = new FileReader();
+		var json;
+		if(!asText) {
+			reader.onload = function(e) {
+				var contents = e.target.result;
+				var arr = new Uint8Array(contents);
+				try {
+					var str = LZString.decompressFromUint8Array(arr);
+					json = JSON.parse(str);
+					simulation = Wormer.Simulation.fromJSON(json.simulation);
+				} catch(e) {
+					console.warn(e);
+					loadSimulation(file, true);
+					return;
+				}
+
+				startSimulation();
+			};
+			reader.readAsArrayBuffer(file);
+		} else {
+			reader.onload = function(e) {
+				var str = e.target.result;
+				try {
+					json = JSON.parse(str);
+					simulation = Wormer.Simulation.fromJSON(json.simulation);
+				} catch(e) {
+					console.error(e);
+					$(".options-load-failed").first().clone()
+						.insertAfter($(".options-load-alert").last())
+						.css("display", "")
+						.addClass("in");
+					return;
+				}
+
+				startSimulation();
+			};
+			reader.readAsText(file);
+		}
+
+		function startSimulation() {
+			$("#options").slideUp(function() {
+				setupForSimulation(simulation); // TODO remove duplicate code
+
+				graphData = json.graph;
+				bestGenes = json.genes;
+
+				window.onbeforeunload = function(e) {
+					return e.returnValue = "Simulation is running. Are you sure to quit?";
+				};
+				
+				Matter.Events.trigger(simulation, 'pause');
+
+				$("#simulation").slideDown();
+			});
+		}
+	}
+
+	function saveSimulation(simulation) {
 		var saveData = {
 			simulation: simulation,
 			graph: graphData,
@@ -346,11 +451,8 @@ $(function() {
 		document.body.appendChild(elem);
 		elem.click();
 		document.body.removeChild(elem);
-	});
-
-	$("#export-options").click(function() {
-		if(!simulation) return;
-
+	}
+	function saveOptions(options) {
 		var json = JSON.stringify(options);
 
 		var elem = document.createElement('a');
@@ -360,14 +462,13 @@ $(function() {
 		document.body.appendChild(elem);
 		elem.click();
 		document.body.removeChild(elem);
-	});
-	$("#export-statics").click(function() {
-		if(!simulation) return;
+	}
 
+	function saveGraph(graphData, bestGenes) {
 		var csv = "\ufeffGeneration,Maximum,Average,Median,Gene\n"; // utf-8 BOM
 		for(var i = 0; i < graphData.length; i++) {
 			csv += graphData[i][0] + "," + graphData[i][1] + "," + graphData[i][2] + "," + graphData[i][3] + ","
-					+ (bestGenes[i]? '"' + JSON.stringify(bestGenes[i]) + '"' : "") + "\n";
+				+ (bestGenes[i]? '"' + JSON.stringify(bestGenes[i]) + '"' : "") + "\n";
 		}
 
 		var elem = document.createElement('a');
@@ -377,6 +478,43 @@ $(function() {
 		document.body.appendChild(elem);
 		elem.click();
 		document.body.removeChild(elem);
+	}
+
+	$("#import-options").change(function() {
+		if(this.files && this.files.length >= 1) {
+			var file = this.files[0];
+			loadOptions(file);
+		}
+	});
+
+	$("#import-simulation").change(function() {
+		if(this.files && this.files.length >= 1) {
+			loadSimulation(this.files[0]);
+		}
+	});
+	
+	$("#simulation-start").click(function() {
+		if(simulation) simulation.start();
+	});
+	$("#simulation-pause").click(function() {
+		if(simulation) simulation.pause();
+	});
+	$("#simulation-terminate").click(function() {
+		if(simulation) simulation.terminate();
+	});
+
+	$("#export-simulation").click(function() {
+		if(!simulation) return;
+
+	});
+
+	$("#export-options").click(function() {
+		if(!simulation) return;
+		saveOptions(simulation.options);
+	});
+	$("#export-statics").click(function() {
+		if(!simulation) return;
+		saveGraph(graphData, bestGenes);
 	});
 
 	$("a[data-toggle=tab][href='#tab-statics']").on('shown.bs.tab', function(e) {

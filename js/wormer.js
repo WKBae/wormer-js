@@ -25,11 +25,17 @@ var Wormer = (function() {
 					preservedWorms: 4,
 					timestep: 1000 / 60,
 					speedFactor: 0,
-					duration: 15000
+					duration: 15000,
+					iterations: {
+						constraint: 2,
+						position: 6,
+						velocity: 4
+					}
 				},
 				worm: {
 					width: 10,
 					length: 100,
+					density: 0.001,
 					joints: 4,
 					stiffness: 0.4,
 					friction: 0.5
@@ -73,8 +79,11 @@ var Wormer = (function() {
 			}
 
 			function createEngine() {
+				var iters = that.options.simulation.iterations;
 				return Engine.create({
-					//constraintIterations: 3 // may have some side-effects on old simulation results
+					constraintIterations: iters.constraint,
+					positionIterations: iters.position,
+					velocityIterations: iters.velocity
 				});
 			}
 
@@ -440,6 +449,7 @@ var Wormer = (function() {
 		function Worm(options, gene) {
 			this.length = options.worm.length;
 			this.width = options.worm.width;
+			this.density = options.worm.density;
 			this.joints = options.worm.joints;
 			this.stiffness = options.worm.stiffness;
 			this.friction = options.worm.friction;
@@ -469,7 +479,7 @@ var Wormer = (function() {
 				for(var i = 0; i < this.joints; i++) {
 					var newBody = Bodies.rectangle(BEGIN_X + divLength / 2 + divLength * i, WORLD_HEIGHT - halfWidth, divLength - 1, this.width, {
 						friction: this.friction,
-						// TODO add density option
+						density: this.density,
 						render: {
 							fillStyle: (i == this.joints - 2)? "#E77" : "#FAA",
 							strokeStyle: "#F88"

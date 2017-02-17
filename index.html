@@ -32,6 +32,9 @@
 				width: auto;
 				border-radius: 3px;
 			}
+			.upload-group {
+				margin-bottom: 10px;
+			}
 			.simulation-ops {
 				margin-bottom: 1em;
 			}
@@ -67,6 +70,24 @@
 							<h3 class="panel-title">Settings</h3>
 						</div>
 						<div class="panel-body">
+							<div class="alert alert-success alert-dismissable fade options-load-alert options-load-success" style="display:none" role="alert">
+								<button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+								<strong>Successful!</strong> Options file loaded successfully.
+							</div>
+							<div class="alert alert-warning alert-dismissable fade options-load-alert options-load-warning" style="display:none" role="alert">
+								<button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+								<strong>Something's wrong...</strong> The file was load, but no matching options were found. It could be an incorrect file, so better check again.
+							</div>
+							<div class="alert alert-danger alert-dismissable fade options-load-alert options-load-failed" style="display:none" role="alert">
+								<button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+								<strong>Failed!</strong> Cannot load the file. Check it and try again.
+							</div>
+							<div class="button-group upload-group">
+								<input type="file" accept="text/json" id="import-options" class="hidden">
+								<input type="file" accept=".bin,text/json" id="import-simulation" class="hidden">
+								<label for="import-options" class="btn btn-link"><span class="glyphicon glyphicon-open-file" aria-hidden="true"></span> Import options...</label>
+								<label for="import-simulation" class="btn btn-link"><span class="glyphicon glyphicon-open" aria-hidden="true"></span> Import simulation...</label>
+							</div>
 							<div class="panel-group">
 								<div class="panel panel-default">
 									<div class="panel-heading">
@@ -112,6 +133,10 @@
 										<div class="form-group col-md-3 col-sm-6 col-xs-12">
 											<label for="length">Length</label>
 											<input type="number" class="form-control" min="0.1" step="0.1" id="length" value="100">
+										</div>
+										<div class="form-group col-md-3 col-sm-6 col-xs-12">
+											<label for="density">Density</label>
+											<input type="number" class="form-control" min="0.0001" step="0.0001" id="density" value="0.001">
 										</div>
 										<div class="form-group col-md-3 col-sm-6 col-xs-12">
 											<label for="joints">Number of joints</label>
@@ -240,6 +265,8 @@
 													<dd class="info-option-worm-width"></dd>
 													<dt>Length</dt>
 													<dd class="info-option-worm-length"></dd>
+													<dt>Density</dt>
+													<dd class="info-option-worm-density"></dd>
 													<dt>Joints</dt>
 													<dd class="info-option-worm-joints"></dd>
 													<dt>Joint stiffness</dt>

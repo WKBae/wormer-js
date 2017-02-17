@@ -94,12 +94,13 @@ $(function() {
 			defaultValues();
 			
 			var rerun = (function setupRerun() {
+				var duration = options.simulation.duration;
 				var rerunOptions = {
 					simulation: {
 						wormsPerGeneration: 1,
 						preservedWorms: 1,
 						speedFactor: 1,
-						duration: options.simulation.duration
+						duration: duration
 					},
 					worm: options.worm,
 					gene: options.gene
@@ -107,13 +108,20 @@ $(function() {
 				var rerunSim = new Wormer.Simulation(rerunOptions);
 
 				var $rerunProgress = $("#rerun-progress");
+				var rerunProgress = $rerunProgress[0];
+				var fitness = 0;
 				rerunSim.on('start resume tick', function() {
-					var progress = this.generationTime / rerunOptions.simulation.duration * 100;
-					$rerunProgress.css('width', progress + "%");
-					$rerunProgress.text((this.generationTime / 1000).toFixed(1) + "s");
+					var progress = this.generationTime / duration * 100;
+					//$rerunProgress.css('width', progress + "%");
+					rerunProgress.style.width = progress + "%";
+					//$rerunProgress.text((this.generationTime / 1000).toFixed(1) + "s");
+					rerunProgress.innerHTML = (this.generationTime / 1000).toFixed(1) + "s";
+					fitness = this.worms[0]._fitness();
 				}).on('generationEnd', function() {
-					$rerunProgress.css('width', "0");
-					$rerunProgress.text("0.0s");
+					//$rerunProgress.css('width', "0");
+					rerunProgress.style.width = 0;
+					//$rerunProgress.text("0.0s");
+					rerunProgress.innerHTML = "0.0s";
 					this.pause();
 				}).on('start resume', function() {
 					$rerunProgress.removeClass('active progress-bar-success progress-bar-warning progress-bar-danger')
@@ -127,6 +135,14 @@ $(function() {
 				});
 
 				var rerunRender = createRender(rerunSim.engines[0], "#rerun-render");
+				// Bootstrap default font
+				rerunRender.context.font = "14px " + ($(document.body).css('font-family') || "\"Helvetica Neue\",Helvetica,Arial,sans-serif");
+				rerunRender.context.textAlign = "left";
+				rerunRender.context.textBaseLine = 	"top";
+				Matter.Events.on(rerunRender, 'afterRender', function(e) {
+					rerunRender.context.fillStyle = "#000000";
+					rerunRender.context.fillText("Fitness: " + fitness.toFixed(3), 5, 15);
+				});
 				$(rerunRender.canvas).click(function() {
 					if(rerunSim.isPaused) rerunSim.resume();
 					else if(rerunSim.isStarted) rerunSim.pause();
@@ -140,6 +156,9 @@ $(function() {
 				xlabel: "Generations",
 				ylabel: "Fitness",
 				labels: ["x", "Max", "Avg", "Mid"],
+				series: {
+					'Max': { showInRangeSelector: true }
+				},
 				valueRange: [0, null],
 				errorBars: showDeviation,
 				legend: 'follow',

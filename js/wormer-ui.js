@@ -288,13 +288,15 @@ $(function() {
 		$("#options").slideUp(function() {
 			var options = readOptions();
 
-			simulation = new Wormer.Simulation(options);
+			simulation = new WorkerWormer.Simulation(options);
 
-			setupForSimulation(simulation);
-			
-			$("#simulation").slideDown(function() {
-				$(window).on('beforeunload', function(e) {
-					return e.returnValue = "Simulation is running. Are you sure to quit?";
+			simulation.on('ready', function() {
+				setupForSimulation(simulation);
+				
+				$("#simulation").slideDown(function() {
+					$(window).on('beforeunload', function(e) {
+						return e.returnValue = "Simulation is running. Are you sure to quit?";
+					});
 				});
 			});
 		});
@@ -398,7 +400,7 @@ $(function() {
 				try {
 					var str = LZString.decompressFromUint8Array(arr);
 					json = JSON.parse(str);
-					simulation = Wormer.Simulation.fromJSON(json.simulation);
+					simulation = WorkerWormer.Simulation.fromJSON(json.simulation);
 				} catch(e) {
 					console.warn(e);
 					loadSimulation(file, true);
@@ -413,7 +415,7 @@ $(function() {
 				var str = e.target.result;
 				try {
 					json = JSON.parse(str);
-					simulation = Wormer.Simulation.fromJSON(json.simulation);
+					simulation = WorkerWormer.Simulation.fromJSON(json.simulation);
 				} catch(e) {
 					console.error(e);
 					$(".options-load-failed").first().clone()
@@ -430,18 +432,20 @@ $(function() {
 
 		function startSimulation() {
 			$("#options").slideUp(function() {
-				setupForSimulation(simulation); // TODO remove duplicate code
+				simulation.on('ready', function() {
+					setupForSimulation(simulation); // TODO remove duplicate code
 
-				graphData = json.graph;
-				bestGenes = json.genes;
+					graphData = json.graph;
+					bestGenes = json.genes;
 
-				window.onbeforeunload = function(e) {
-					return e.returnValue = "Simulation is running. Are you sure to quit?";
-				};
-				
-				Matter.Events.trigger(simulation, 'pause');
+					window.onbeforeunload = function(e) {
+						return e.returnValue = "Simulation is running. Are you sure to quit?";
+					};
+					
+					Matter.Events.trigger(simulation, 'pause');
 
-				$("#simulation").slideDown();
+					$("#simulation").slideDown();
+				});
 			});
 		}
 	}

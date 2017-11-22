@@ -1,49 +1,64 @@
 "use strict"
 
 // TODO move these to setup
-const wormsPerWorker = 2;
-const childsPerWorker = 2;
+const wormsPerWorker = 3;
+const childsPerWorker = 5;
+
+var workerId;
 
 var isParent;
 var childs;
 var simulation;
 var wormCount;
 
-var progress;
 var doneGenes;
 var doneFitness;
 
-onmessage = function(e) {
+self.onmessage = function(e) {
 	var data = e.data;
-	if(data.type === "setup") {
+	//console.log(data);
+	if(data.type === "canNest") {
+		self.postMessage({ 'type': "nest", 'nestable': Worker? true : false }); // TODO implement non-nested worker
+	} else if(data.type === "setup") {
 		var count = data.count;
 		var options = data.options;
-		if(count > wormsPerWorker) {
+		workerId = data.id || "1";
+		if(count > wormsPerWorker) { // TODO childsPerWorker goes before wormsPerWorker. having same worm count(and less workers) will perform better
 			isParent = true;
 
-			progress = [0, 0];
 			doneGenes = [];
 			doneFitness = [];
-
+console.log("Worker " + workerId + ", parent, count "  +count);
 			var prevCount = 0;
 			if(childs && childs.length > 0) {
 				prevCount = childs.length;
 				for(var i = 0; i < prevCount; i++) {
-					childs[i].count = ((count/childsPerWorker)|0) + (count%childsPerWorker > i? 1 : 0);
-					childs[i].isSetUp = false;
-					childs[i].worker.postMessage({ 'type': "setup", 'count': childs[i].count, 'options': options });
+					childs[i] = {
+						'id': workerId + "-" + (i+1),
+						'worker': childs[i].worker,
+						'isSetUp': false,
+						'isStarted': false,
+						'isPaused': false,
+						'progress': 0,
+						'count': ((count/childsPerWorker)|0) + (count%childsPerWorker > i? 1 : 0)
+					};
+					childs[i].worker.postMessage({ 'type': "setup", 'count': childs[i].count, 'options': options, 'id': childs[i].id });
 				}
 			} else {
 				childs = [];
 			}
 			for(var i = prevCount; i < childsPerWorker; i++) {
 				childs[i] = {
+					'id': workerId + "-" + (i+1),
 					'worker': new Worker('wormer-nested-worker.js'),
 					'isSetUp': false,
+					'isStarted': false,
+					'isPaused': false,
+					'progress': 0,
 					'count': ((count/childsPerWorker)|0) + (count%childsPerWorker > i? 1 : 0)
 				};
 				childs[i].worker.onmessage = childMessage(i);
-				childs[i].worker.postMessage({ 'type': "setup", 'count': childs[i].count, 'options': options });
+				childs[i].worker.postMessage({ 'type': "setup", 'count': childs[i].count, 'options': options, 'id': childs[i].id });
 			}
 		} else {
 			isParent = false;
@@ -64,7 +79,7 @@ onmessage = function(e) {
 			simulation = new Wormer.Simulation(options);
 			setupSimulation();
 
-			self.postMessage({ 'type': "setupDone" });
+			self.postMessage({ 'type': "setupDone" });console.log("Worker " + workerId + " setup done, count " + count);
 		}
 	} else if(isParent) {
 		switch(data.type) {
@@ -77,10 +92,27 @@ onmessage = function(e) {
 			}
 			break;
 		case "start":
+			childs.forEach(function(child) {
+				//if(!child.isStarted)
+					child.worker.postMessage(data);
+			});
+			break;
 		case "pause":
+			childs.forEach(function(child) {
+				//if(child.isStarted && !child.isPaused)
+					child.worker.postMessage(data);
+			});
+			break;
+		case "resume":
+			childs.forEach(function(child) {
+				//if(child.isStarted && child.isPaused)
+					child.worker.postMessage(data);
+			});
+			break;
 		case "terminate":
 			childs.forEach(function(child) {
-				child.worker.postMessage(data);
+				//if(child.isStarted)
+					child.worker.postMessage(data);
 			});
 			break;
 		}
@@ -99,6 +131,9 @@ onmessage = function(e) {
 			simulation.pause();
 			self.postMessage({ 'type': "progress", 'progress': simulation.generationTime / simulation.options.simulation.duration });
 			break;
+		case "resume":
+			simulation.resume();
+			break;
 		case "terminate":
 			simulation.terminate();
 			// self.stop();
@@ -106,17 +141,19 @@ onmessage = function(e) {
 		}
 	}
 }
-
+// TODO sometimes "pause" is ignored, without "paused" message, when toggling pause frequently, usually on generation end
+// TODO after resolved, remove console.log mess
 function setupSimulation() {
-	const reportRate = 0.1; // every 10%
+	const reportRate = 0.05; // every 5%
 	var duration = simulation.options.simulation.duration;
 	var step = simulation.options.simulation.timestep;
 	var ticks = Math.floor((duration / step) * reportRate);
 	var current = 0;
+	var genMessage = null;
 
 	simulation.on('generationStart', function() {
 		current = 0;
-		self.postMessage({ 'type': "progress", 'progress': 0 });
+		//self.postMessage({ 'type': "progress", 'progress': 0 });
 	}).on('tick', function() {
 		current++;
 		if(current >= ticks) {
@@ -132,8 +169,22 @@ function setupSimulation() {
 		});
 		var average = e.averageFitness;
 		self.postMessage({ 'type': "progress", 'progress': 1 });
-		self.postMessage({ 'type': "generationEnd", 'genes': genes, 'fitness': fitness, 'average': average });
+		//self.postMessage({ 'type': "generationEnd", 'genes': genes, 'fitness': fitness, 'average': average });
+		genMessage = { 'type': "generationEnd", 'genes': genes, 'fitness': fitness, 'average': average };
 		this.pause();
+	}).on('start', function() {
+		self.postMessage({ 'type': "started" });
+	}).on('resume', function() {
+		self.postMessage({ 'type': "resumed" });
+	}).on('pause', function() {console.log(workerId, "Paused, genMessage:", genMessage);
+		if(genMessage) {
+			self.postMessage(genMessage);
+			genMessage = null;
+		} else {
+			self.postMessage({ 'type': "paused" });
+		}
+	}).on('terminate', function() {
+		self.postMessage({ 'type': "terminated" });
 	});
 }
 
@@ -143,57 +194,120 @@ function childMessage(id) {
 		var data = e.data;
 		var type = data.type;
 		switch(type) {
-		case "setupDone":
-			childs[id].isSetUp = true;
-			var num;
-			for(num = 0; num < childsPerWorker; num++) {
-				if(!childs[num].isSetUp) break;
-			}
-			if(num === childsPerWorker) {
-				self.postMessage({ 'type': "setupDone" });
-			}
-			break;
 		case "progress":
-			progress[id] = data.progress;
-			var totalProgress = 0;
-			for(var i = 0; i < childsPerWorker; i++) {
-				totalProgress += progress[i];
-			}
-			var avgProgress = totalProgress / childsPerWorker;
-			if(Math.abs(lastProgress - avgProgress) >= 0.05) {
-				self.postMessage({ 'type': "progress", 'progress': avgProgress });
-				lastProgress = avgProgress;
-			}
+			(function(id, data) {
+				childs[id].progress = data.progress;
+				var totalProgress = 0;
+				for(var i = 0; i < childsPerWorker; i++) {
+					totalProgress += childs[i].progress;
+				}
+				var avgProgress = totalProgress / childsPerWorker;
+				if(Math.abs(lastProgress - avgProgress) >= 0.05) {
+					self.postMessage({ 'type': "progress", 'progress': avgProgress });
+					lastProgress = avgProgress;
+				}
+			})(id, data);
 			break;
 		case "generationEnd":
-			doneGenes.push(data.genes);
-			doneFitness.push(data.fitness);
-			// TODO use childsPerWorker, instead of fixed value(2)
-			if(doneGenes.length >= 2) {
-				/* Merge sort, genes and fitnesses are posted sorted */
-				var total = doneGenes[0].length + doneGenes[1].length;
-				var fitnessSum = 0;
-				var i0 = 0, i1 = 0;
-				var resGenes = [];
-				var resFitness = [];
-				for(var count = 0; count < total; count++) {
-					if(i1 >= doneGenes[1].length || doneFitness[0][i0] >= doneFitness[1][i1]) {
-						resGenes[count] = doneGenes[0][i0];
-						resFitness[count] = doneFitness[0][i0];
-						i0++;
-					} else {
-						resGenes[count] = doneGenes[1][i1];
-						resFitness[count] = doneFitness[1][i1];
-						i1++;
-					}
-					fitnessSum += resFitness[count];
-				}
-				self.postMessage({ 'type': "generationEnd", 'genes': resGenes, 'fitness': resFitness, 'average': fitnessSum / total });
-				doneGenes = [];
-				doneFitness = [];
-			}
-			break;
+			(function(id, data) {
+				doneGenes.push(data.genes);
+				doneFitness.push(data.fitness);
+				childs[id].isPaused = true;
 
+				if(doneGenes.length >= childsPerWorker) {
+					/* Merge sort, genes and fitnesses are posted after being sorted */
+					var total = 0;
+					var idx = [];
+					for(var i = 0; i < childsPerWorker; i++) {
+						total += doneGenes[i].length;
+						idx[i] = 0;
+					}console.log(workerId, "done " + doneGenes.length, "childs " + childs.length, "total " + total);
+
+					var fitnessSum = 0;
+					var resGenes = [];
+					var resFitness = [];
+					for(var count = 0; count < total; count++) {
+						var maxFitness = -Infinity;
+						var maxI = 0;
+						for(var i = 0; i < childsPerWorker; i++) {
+							if(idx[i] < doneGenes[i].length && doneFitness[i][idx[i]] > maxFitness) {
+								maxFitness = doneFitness[i][idx[i]];
+								maxI = i;
+							}
+						}
+						resGenes[count] = doneGenes[maxI][idx[maxI]];
+						resFitness[count] = doneFitness[maxI][idx[maxI]];
+						idx[maxI]++;
+						fitnessSum += resFitness[count];
+					}
+					self.postMessage({ 'type': "generationEnd", 'genes': resGenes, 'fitness': resFitness, 'average': fitnessSum / total });
+					doneGenes = [];
+					doneFitness = [];
+				}
+			})(id, data);
+			break;
+		case "setupDone":
+			(function(id, data) {
+				childs[id].isSetUp = true;
+				var num;
+				for(num = 0; num < childsPerWorker; num++) {
+					if(!childs[num].isSetUp) break;
+				}
+				if(num === childsPerWorker) {
+					self.postMessage({ 'type': "setupDone" });
+				}
+			})(id, data);
+			break;
+		case "started":
+			(function(id, data) {
+				childs[id].isStarted = true;
+				childs[id].isPaused = false;
+				var num;
+				for(num = 0; num < childsPerWorker; num++) {
+					if(!childs[num].isStarted) break;
+				}
+				if(num === childsPerWorker) {
+					self.postMessage({ 'type': "started" });
+				}
+			})(id, data);
+			break;
+		case "paused":
+			(function(id, data) {
+				childs[id].isPaused = true;
+				var num;
+				for(num = 0; num < childsPerWorker; num++) {
+					if(!childs[num].isPaused) break;
+				}
+				if(num === childsPerWorker) {
+					self.postMessage({ 'type': "paused" });
+				}
+			})(id, data);
+			break;
+		case "resumed":
+			(function(id, data) {
+				childs[id].isPaused = false;
+				var num;
+				for(num = 0; num < childsPerWorker; num++) {
+					if(childs[num].isPaused) break;
+				}
+				if(num === childsPerWorker) {
+					self.postMessage({ 'type': "resumed" });
+				}
+			})(id, data);
+			break;
+		case "terminated":
+			(function(id, data) {
+				childs[id].isStarted = false;
+				childs[id].isPaused = false;
+				var num;
+				for(num = 0; num < childsPerWorker; num++) {
+					if(childs[num].isStarted) break;
+				}
+				if(num === childsPerWorker) {
+					self.postMessage({ 'type': "terminated" });
+				}
+			})(id, data);
+			break;
 		}
 	}
 }

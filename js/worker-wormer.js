@@ -76,8 +76,9 @@ var WorkerWormer = (function() {
 
 
 			var duration = this.options.simulation.duration;
+			var genEnded = false;
 			function onWorkerMessage(e) {
-				var data = e.data;
+				var data = e.data;console.log(data);
 				switch(data.type) {
 				case 'setupDone':
 					distributeGenes();
@@ -94,9 +95,33 @@ var WorkerWormer = (function() {
 					that._accumEngineTime += duration;
 					that.generationTime = 0;
 					that.generation++;
-					if(that.isStarted && !that.isPaused) {
+					/*if(that.isStarted && !that.isPaused) {
 						that._worker.postMessage({ 'type': "start" });
-					}
+					}*/
+					that.isPaused = true;
+					that.resume();
+					break;
+				case "started":
+					that.isStarted = true;
+					that.isPaused = false;
+
+					Events.trigger(that, 'start', {
+						options: that.options
+					});
+					Events.trigger(that, 'generationStart');
+					break;
+				case "paused":
+					that.isPaused = true;
+					Events.trigger(that, 'pause');
+					break;
+				case "resumed":
+					that.isPaused = false;
+					Events.trigger(that, 'resume');
+					break;
+				case "terminated":
+					that.isStarted = false;
+					that.isPaused = false;
+					Events.trigger(that, 'terminate');
 					break;
 				}
 			}
@@ -172,14 +197,6 @@ var WorkerWormer = (function() {
 
 				this.generationTime = 0;
 				this.totalEngineTime = 0;
-
-				this.isStarted = true;
-				this.isPaused = false;
-
-				Events.trigger(this, 'start', {
-					options: this.options
-				});
-				Events.trigger(this, 'generationStart');
 				
 				this._worker.postMessage({ 'type': "start" });
 			},
@@ -187,19 +204,13 @@ var WorkerWormer = (function() {
 				if(!this.isStarted || this.isPaused) return false;
 
 				this._worker.postMessage({ 'type': "pause" });
-				this.isPaused = true;
 
-				Events.trigger(this, 'pause'); // TODO trigger pause event when all workers are paused
-
-				return this.isStarted && this.isPaused; // state can be changed in event handlers
+				return this.isStarted && this.isPaused; // TODO return value has no meaning in this asynchronous code
 			},
 			resume: function() {
 				if(!this.isStarted || !this.isPaused) return false;
 
-				this.isPaused = false;
-				this._worker.postMessage({ 'type': "start" });
-
-				Events.trigger(this, 'resume');
+				this._worker.postMessage({ 'type': "resume" });
 
 				return this.isStarted && !this.isPaused;
 			},
@@ -207,10 +218,6 @@ var WorkerWormer = (function() {
 				if(!this.isStarted) return false;
 
 				this._worker.postMessage({ 'type': "terminate" });
-				this.isStarted = false;
-				this.isPaused = false;
-
-				Events.trigger(this, 'terminate');
 
 				return !this.isStarted;
 			},

@@ -267,16 +267,20 @@ $(function() {
 				totalEngineTime = this.totalEngineTime;
 			});
 
-			var simulationTime = $(".info-time-simulation")[0];
-			var totalTime = $(".info-time-total")[0];
+			var $simulationTime = $(".info-time-simulation");
+			var $totalTime = $(".info-time-total");
 
 			(function updateTimeLabels() {
 				//$simulationTime.text((totalEngineTime / 1000).toFixed(2) + "s");
-				simulationTime.innerHTML = (totalEngineTime / 1000).toFixed(2) + "s";
+				$simulationTime.each(function() {
+					this.innerHTML = (totalEngineTime / 1000).toFixed(2) + "s";
+				});
 
 				var runningTime = timeStarted > 0? Date.now() - timeStarted : 0;
 				//$totalTime.text(((runningTime + timeOffset) / 1000).toFixed(2) + "s");
-				totalTime.innerHTML = ((runningTime + timeOffset) / 1000).toFixed(2) + "s";
+				$totalTime.each(function() {
+					this.innerHTML = ((runningTime + timeOffset) / 1000).toFixed(2) + "s";
+				});
 
 				requestAnimationFrame(updateTimeLabels);
 			})();
@@ -294,9 +298,9 @@ $(function() {
 				setupForSimulation(simulation);
 				
 				$("#simulation").slideDown(function() {
-					$(window).on('beforeunload', function(e) {
+					window.onbeforeunload = function(e) {
 						return e.returnValue = "Simulation is running. Are you sure to quit?";
-					});
+					};
 				});
 			});
 		});
